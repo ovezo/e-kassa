@@ -93,6 +93,26 @@ Output:
 
 The installed app stores its SQLite database under the user profile (e.g. `%APPDATA%\iKassir\ikassir.db`). On first launch, bundled Prisma migrations are applied automatically.
 
+If you see **Cannot find module '.prisma/client/default'** after an older build, reinstall from a fresh `npm run dist:win` build (the installer bundles the Prisma client explicitly).
+
+### `no such table: Product` (SQLite)
+
+Usually the database file was created **before migrations ran in the wrong order**, or `npm run db:migrate` was run on `prisma/dev.db` while the **installed app** uses `%APPDATA%\iKassir\ikassir.db`.
+
+**Installed app (Windows):** uninstall is not required — quit iKassir, delete:
+
+`%APPDATA%\iKassir\ikassir.db`
+
+Then start iKassir again (a fresh DB is created from the bundled template).
+
+**Development (project folder):**
+
+```bash
+npm run db:reset
+```
+
+Then `npm run dist:win` again so the installer includes an up-to-date template database.
+
 ### Build Windows installer from macOS
 
 Cross-building often works:

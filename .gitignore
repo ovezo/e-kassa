@@ -34,6 +34,7 @@ yarn-error.log*
 # prisma local db (dev) — path matches prisma/schema datasource
 /prisma/dev.db
 /prisma/dev.db-journal
+/prisma/ikassir-template.db
 
 # typescript
 *.tsbuildinfo
