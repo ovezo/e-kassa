@@ -73,6 +73,30 @@ function roundMoney(n: number): number {
   return Math.round(n * 100) / 100;
 }
 
+const NEW_ORDER_BASELINE_SKIP_KEY = "ikassir_new_order_baseline_skip";
+
+/** Survives remount when URL changes from draft → persisted order id. */
+function markSkipBaselineForNewOrder(orderId: string): void {
+  try {
+    sessionStorage.setItem(NEW_ORDER_BASELINE_SKIP_KEY, orderId);
+  } catch {
+    /* ignore */
+  }
+}
+
+function consumeSkipBaselineForNewOrder(orderId: string): boolean {
+  try {
+    const stored = sessionStorage.getItem(NEW_ORDER_BASELINE_SKIP_KEY);
+    if (stored === orderId) {
+      sessionStorage.removeItem(NEW_ORDER_BASELINE_SKIP_KEY);
+      return true;
+    }
+  } catch {
+    /* ignore */
+  }
+  return false;
+}
+
 /** URL-driven new order before first menu item (no DB row yet). */
 function parseNewOrderDraft(search: URLSearchParams): { type: OrderType; tableId: string | null } | null {
   const typeRaw = search.get("type");
@@ -241,6 +265,7 @@ export function OrderWorkspace() {
   const visitBaselinedOrderId = useRef<string | null>(null);
   /** Skip baseline right after creating a new order in this session. */
   const skipBaselineOrderId = useRef<string | null>(null);
+  const prevEffectiveOrderIdRef = useRef<string | null | undefined>(undefined);
 
   const storeProducts = useMemo(() => products.filter((p) => p.active), [products]);
 
@@ -339,9 +364,22 @@ export function OrderWorkspace() {
   }, [order, draft, session, orderId, draftTableLabel, settings]);
 
   useEffect(() => {
-    visitBaselinedOrderId.current = null;
-    skipBaselineOrderId.current = null;
-    setPrintJob(null);
+    const current = effectiveOrderId ?? null;
+    const prev = prevEffectiveOrderIdRef.current;
+
+    if (prev !== undefined) {
+      const switchedOrder =
+        prev !== null && current !== null && prev !== current;
+      const leftOrder = prev !== null && current === null;
+      if (switchedOrder || leftOrder) {
+        visitBaselinedOrderId.current = null;
+        skipBaselineOrderId.current = null;
+        setPrintedQty({});
+        setPrintJob(null);
+      }
+    }
+
+    prevEffectiveOrderIdRef.current = current;
   }, [effectiveOrderId]);
 
   useEffect(() => {
@@ -349,7 +387,10 @@ export function OrderWorkspace() {
 
     if (order.status === OrderStatus.OPEN && visitBaselinedOrderId.current !== order.id) {
       visitBaselinedOrderId.current = order.id;
-      if (skipBaselineOrderId.current === order.id) {
+      const skipAsNewOrder =
+        skipBaselineOrderId.current === order.id ||
+        consumeSkipBaselineForNewOrder(order.id);
+      if (skipAsNewOrder) {
         skipBaselineOrderId.current = null;
         setPrintedQty({});
         return;
@@ -390,6 +431,7 @@ export function OrderWorkspace() {
         }
         skipBaselineOrderId.current = res.order.id;
         visitBaselinedOrderId.current = res.order.id;
+        markSkipBaselineForNewOrder(res.order.id);
         setPrintedQty({});
         setOrder(res.order);
         router.replace(`/pos/order?id=${res.order.id}`);
@@ -596,8 +638,8 @@ export function OrderWorkspace() {
         <p className="shrink-0 rounded-xl bg-amber-50 px-4 py-2 text-sm text-amber-950 print:hidden">{error}</p>
       ) : null}
 
-      <div className="flex min-h-0 flex-1 flex-col gap-0 overflow-hidden rounded-2xl border border-stone-200 bg-stone-50/50 print:hidden lg:flex-row">
-        <section className="min-h-0 flex-1 overflow-y-auto overscroll-contain p-4 lg:border-r lg:border-stone-200 lg:p-5">
+      <div className="flex min-h-0 flex-1 flex-row gap-0 overflow-hidden rounded-2xl border border-stone-200 bg-stone-50/50 print:hidden">
+        <section className="min-h-0 min-w-0 flex-1 overflow-y-auto overscroll-contain border-r border-stone-200 p-4 sm:p-5">
           <h2 className="mb-4 text-lg font-semibold text-stone-800">{t("pos.order.menu")}</h2>
           <div className="space-y-10">
             {categoriesSorted.map((cat) => {
@@ -608,7 +650,7 @@ export function OrderWorkspace() {
                   <h3 className="mb-3 border-b border-stone-200 pb-2 text-xl font-semibold text-stone-900">
                     {cat.name}
                   </h3>
-                  <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4 xl:grid-cols-5">
+                  <div className="grid grid-cols-3 gap-3">
                     {plist.map((p) => (
                       <button
                         key={p.id}
@@ -628,12 +670,12 @@ export function OrderWorkspace() {
           </div>
         </section>
 
-        <aside className="flex max-h-[min(52vh,520px)] min-h-0 w-full shrink-0 flex-col border-t border-stone-200 bg-white lg:max-h-none lg:h-full lg:min-h-0 lg:w-[min(100%,420px)] lg:self-stretch lg:border-l lg:border-t-0">
-          <div className="shrink-0 border-b border-stone-100 px-4 py-3 lg:px-5">
+        <aside className="flex h-full min-h-0 w-[min(100%,420px)] min-w-[240px] shrink-0 flex-col self-stretch border-l border-stone-200 bg-white">
+          <div className="shrink-0 border-b border-stone-100 px-4 py-3 sm:px-5">
             <h2 className="text-lg font-semibold text-stone-800">{t("pos.order.cart")}</h2>
           </div>
 
-          <div className="max-h-[42vh] min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 lg:max-h-none lg:px-5">
+          <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 sm:px-5">
             <ul className="divide-y divide-stone-100">
               {viewOrder.lines.length === 0 ? (
                 <li className="py-8 text-center text-stone-500">{t("pos.order.cartEmpty")}</li>
@@ -706,7 +748,7 @@ export function OrderWorkspace() {
             </ul>
           </div>
 
-          <div className="shrink-0 space-y-2 border-t border-stone-200 bg-stone-50/80 px-4 py-4 lg:px-5">
+          <div className="shrink-0 space-y-2 border-t border-stone-200 bg-stone-50/80 px-4 py-4 sm:px-5">
             <dl className="space-y-1.5 text-sm">
               <div className="flex justify-between text-stone-600">
                 <dt>{t("pos.order.subtotal")}</dt>
@@ -731,7 +773,7 @@ export function OrderWorkspace() {
             </dl>
           </div>
 
-          <div className="shrink-0 border-t border-stone-200 bg-white p-4 lg:p-5 lg:pt-4">
+          <div className="shrink-0 border-t border-stone-200 bg-white p-4 sm:p-5 sm:pt-4">
             {viewOrder.status === OrderStatus.OPEN ? (
               <div className="space-y-2">
                 {!isPreview && effectiveOrderId ? (
