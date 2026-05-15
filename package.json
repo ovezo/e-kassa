@@ -1,0 +1,108 @@
+{
+  "name": "ikassir",
+  "version": "0.1.0",
+  "private": true,
+  "main": "dist-electron/electron/main.js",
+  "scripts": {
+    "postinstall": "prisma generate",
+    "clean": "rm -rf .next out dist-electron",
+    "dev": "npm run build:electron && concurrently -k -n \"next,electron\" -c \"blue,magenta\" \"cross-env NODE_ENV=development next dev\" \"wait-on -t 120000 http-get://127.0.0.1:3000/ && echo '[iKassir] Starting Electron…' && cross-env NODE_ENV=development electron .\"",
+    "dev:electron": "npm run build:electron && cross-env NODE_ENV=development electron .",
+    "dev:web": "next dev",
+    "build:electron": "tsc -p electron/tsconfig.json",
+    "build:next": "next build",
+    "build": "npm run build:next && npm run build:electron",
+    "start": "next start",
+    "lint": "next lint",
+    "db:migrate": "prisma migrate dev",
+    "db:push": "prisma db push",
+    "db:studio": "prisma studio",
+    "dist": "npm run build && electron-builder",
+    "dist:dir": "npm run build && electron-builder --dir",
+    "prepare:pack": "prisma generate",
+    "dist:win": "npm run prepare:pack && npm run build && electron-builder --win nsis --x64",
+    "dist:win:dir": "npm run prepare:pack && npm run build && electron-builder --win --dir --x64"
+  },
+  "dependencies": {
+    "@dnd-kit/core": "^6.3.1",
+    "@dnd-kit/sortable": "^10.0.0",
+    "@dnd-kit/utilities": "^3.2.2",
+    "@prisma/client": "^6.8.2",
+    "bcryptjs": "^3.0.2",
+    "next": "^15.3.2",
+    "react": "^19.1.0",
+    "react-dom": "^19.1.0",
+    "zod": "^3.24.4"
+  },
+  "devDependencies": {
+    "@types/bcryptjs": "^2.4.6",
+    "@types/node": "^22.15.21",
+    "@types/react": "^19.1.5",
+    "@types/react-dom": "^19.1.5",
+    "autoprefixer": "^10.4.21",
+    "concurrently": "^9.1.2",
+    "cross-env": "^7.0.3",
+    "electron": "^35.1.5",
+    "electron-builder": "^26.0.12",
+    "eslint": "^9.27.0",
+    "eslint-config-next": "^15.3.2",
+    "postcss": "^8.5.3",
+    "prisma": "^6.8.2",
+    "tailwindcss": "^3.4.17",
+    "typescript": "^5.8.3",
+    "wait-on": "^8.0.3"
+  },
+  "build": {
+    "appId": "com.ikassir.app",
+    "productName": "iKassir",
+    "directories": {
+      "output": "release",
+      "buildResources": "build"
+    },
+    "files": [
+      "dist-electron/**/*",
+      ".next/**/*",
+      "public/**/*",
+      "package.json",
+      "next.config.ts",
+      "node_modules/**/*",
+      "node_modules/.prisma/**/*",
+      "prisma/**/*",
+      "!**/*.map",
+      "!node_modules/@types/**"
+    ],
+    "asarUnpack": [
+      "node_modules/.prisma/**",
+      "node_modules/@prisma/**",
+      "node_modules/prisma/**"
+    ],
+    "afterPack": "./scripts/electron-after-pack.cjs",
+    "extraResources": [
+      {
+        "from": "prisma",
+        "to": "prisma",
+        "filter": ["**/*"]
+      }
+    ],
+    "win": {
+      "target": [
+        {
+          "target": "nsis",
+          "arch": ["x64"]
+        }
+      ],
+      "artifactName": "iKassir-Setup-${version}.${ext}"
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "iKassir"
+    },
+    "mac": {
+      "category": "public.app-category.business",
+      "target": ["dmg", "zip"]
+    }
+  }
+}

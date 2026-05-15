@@ -1,0 +1,110 @@
+generator client {
+  provider      = "prisma-client-js"
+  binaryTargets = ["native", "windows"]
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  ADMIN
+  STAFF
+}
+
+enum OrderType {
+  TABLE
+  TAKEAWAY_PICKUP
+  TAKEAWAY_DELIVERY
+}
+
+enum OrderStatus {
+  OPEN
+  CLOSED
+}
+
+model User {
+  id           String     @id @default(cuid())
+  login        String     @unique
+  passwordHash String
+  displayName  String
+  role         Role
+  active       Boolean    @default(true)
+  createdAt    DateTime   @default(now())
+  updatedAt    DateTime   @updatedAt
+  ordersOpened Order[]    @relation("OpenedBy")
+  auditLogs    AuditLog[]
+}
+
+model Category {
+  id        String    @id @default(cuid())
+  name      String
+  sortOrder Int       @default(0)
+  active    Boolean   @default(true)
+  products  Product[]
+}
+
+model Product {
+  id         String      @id @default(cuid())
+  name       String
+  priceTmt   Float
+  categoryId String
+  category   Category    @relation(fields: [categoryId], references: [id])
+  active     Boolean     @default(true)
+  sortOrder  Int         @default(0)
+  orderLines OrderLine[]
+}
+
+model CafeTable {
+  id        String  @id @default(cuid())
+  label     String
+  sortOrder Int     @default(0)
+  active    Boolean @default(true)
+  orders    Order[]
+}
+
+model Order {
+  id               String      @id @default(cuid())
+  type               OrderType
+  status             OrderStatus @default(OPEN)
+  tableId            String?
+  table              CafeTable?  @relation(fields: [tableId], references: [id])
+  openedByUserId     String
+  openedBy           User        @relation("OpenedBy", fields: [openedByUserId], references: [id])
+  openedAt           DateTime    @default(now())
+  closedAt           DateTime?
+  subtotalTmt        Float       @default(0)
+  serviceFeeTmt      Float       @default(0)
+  deliveryFeeTmt     Float       @default(0)
+  totalTmt           Float       @default(0)
+  lines              OrderLine[]
+}
+
+model OrderLine {
+  id            String   @id @default(cuid())
+  orderId       String
+  order         Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  productId     String?
+  product       Product? @relation(fields: [productId], references: [id])
+  productName   String
+  unitPriceTmt  Float
+  qty           Int      @default(1)
+  lineTotalTmt  Float
+  createdAt     DateTime @default(now())
+}
+
+model Setting {
+  key   String @id
+  value String
+}
+
+model AuditLog {
+  id        String   @id @default(cuid())
+  userId    String?
+  user      User?    @relation(fields: [userId], references: [id])
+  action    String
+  entity    String?
+  payload   String?
+  createdAt DateTime @default(now())
+}

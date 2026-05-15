@@ -1,0 +1,18 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "CommonJS",
+    "lib": ["ES2022"],
+    "strict": true,
+    "skipLibCheck": true,
+    "esModuleInterop": true,
+    "resolveJsonModule": true,
+    "moduleResolution": "node",
+    "outDir": "../dist-electron",
+    "rootDir": "..",
+    "declaration": false,
+    "sourceMap": true
+  },
+  "include": ["./**/*.ts", "./**/*.d.ts", "../src/lib/server/ipc/**/*.ts"],
+  "exclude": ["node_modules"]
+}
