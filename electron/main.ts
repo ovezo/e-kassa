@@ -1,3 +1,4 @@
+import fs from "fs";
 import net, { type AddressInfo } from "net";
 import http from "http";
 import path from "path";
@@ -23,7 +24,7 @@ function resolveDbPath(): string {
   if (app.isPackaged) {
     return path.join(app.getPath("userData"), "ikassir.db");
   }
-  return path.join(process.cwd(), "prisma", "dev.db");
+  return path.join(appRoot(), "prisma", "dev.db");
 }
 
 function getFreePort(): Promise<number> {
@@ -133,6 +134,12 @@ async function createMainWindow(): Promise<void> {
 
 app.whenReady().then(() => {
   const dbPath = resolveDbPath();
+  const dbDir = path.dirname(dbPath);
+  if (!fs.existsSync(dbDir)) {
+    fs.mkdirSync(dbDir, { recursive: true });
+  }
+  console.error("[iKassir] Database path:", dbPath);
+
   if (app.isPackaged) {
     try {
       ensureDatabase(dbPath, appRoot());

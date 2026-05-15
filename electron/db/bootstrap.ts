@@ -2,10 +2,10 @@ import { app } from "electron";
 import { spawnSync } from "child_process";
 import fs from "fs";
 import path from "path";
-import { pathToFileURL } from "url";
 
 function databaseUrl(dbFilePath: string): string {
-  return pathToFileURL(dbFilePath).href;
+  const normalized = dbFilePath.split(path.sep).join("/");
+  return `file:${normalized}`;
 }
 
 function resolvePrismaDir(appRoot: string): string {
