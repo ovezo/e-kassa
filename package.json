@@ -19,7 +19,7 @@
     "db:studio": "prisma studio",
     "dist": "npm run build && electron-builder",
     "dist:dir": "npm run build && electron-builder --dir",
-    "db:reset": "node -e \"try{require('fs').unlinkSync('prisma/dev.db')}catch(e){}\" && prisma migrate deploy",
+    "db:reset": "node scripts/db-reset.cjs",
     "prepare:pack": "prisma generate && node scripts/build-db-template.cjs",
     "dist:win": "npm run prepare:pack && npm run build && electron-builder --win nsis --x64",
     "dist:win:dir": "npm run prepare:pack && npm run build && electron-builder --win --dir --x64"

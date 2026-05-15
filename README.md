@@ -21,11 +21,13 @@ Desktop POS for a coffee shop reception: **Electron** + **Next.js** (normal serv
    npm install
    ```
 
-3. Create / migrate the local database:
+3. Create the local database (single initial migration):
 
    ```bash
-   npm run db:migrate
+   npm run db:reset
    ```
+
+   Use `npm run db:migrate` only when you change `prisma/schema.prisma` during development.
 
 ## Development
 
@@ -97,7 +99,7 @@ If you see **Cannot find module '.prisma/client/default'** after an older build,
 
 ### `no such table: Product` (SQLite)
 
-Usually the database file was created **before migrations ran in the wrong order**, or `npm run db:migrate` was run on `prisma/dev.db` while the **installed app** uses `%APPDATA%\iKassir\ikassir.db`.
+Usually an **old database file** is still present from a previous schema, or `npm run db:migrate` was run on `prisma/dev.db` while the **installed app** uses `%APPDATA%\iKassir\ikassir.db`.
 
 **Installed app (Windows):** uninstall is not required — quit iKassir, delete:
 
