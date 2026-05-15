@@ -3,7 +3,9 @@
 import { OrderStatus, OrderType } from "@prisma/client";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
+import { OrderReceiptView } from "@/components/OrderReceiptView";
 import { PageHeader } from "@/components/PageHeader";
+import { ReceiptModal } from "@/components/ReceiptModal";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ikassirInvoke } from "@/lib/electron-api";
 import { formatTmt } from "@/lib/format-money";
@@ -115,79 +117,6 @@ function parseNewOrderDraft(search: URLSearchParams): { type: OrderType; tableId
   return null;
 }
 
-function ReceiptPrintView({
-  venueName,
-  orderId,
-  orderType,
-  tableLabel,
-  timestamp,
-  lines,
-  totals,
-  orderTypeLabel,
-  servicePct,
-  deliveryFee,
-  t,
-}: {
-  venueName: string;
-  orderId: string;
-  orderType: OrderType;
-  tableLabel: string | null;
-  timestamp: string;
-  lines: ReceiptLine[];
-  totals: ReceiptTotals;
-  orderTypeLabel: (type: OrderType) => string;
-  servicePct: string;
-  deliveryFee: string;
-  t: (key: string, params?: Record<string, string>) => string;
-}) {
-  return (
-    <div className="fixed inset-0 z-[9999] hidden bg-white p-6 print:block">
-      <div className="mx-auto max-w-md text-center text-sm">
-        <div className="text-xl font-bold">{venueName}</div>
-        <div className="mt-2 text-stone-600">{new Date(timestamp).toLocaleString()}</div>
-        <div className="mt-1 font-mono text-xs">
-          {t("pos.order.printOrderId")} {orderId.slice(0, 8)}…
-        </div>
-        <div className="mt-1">
-          {orderTypeLabel(orderType)}
-          {tableLabel ? ` · ${tableLabel}` : ""}
-        </div>
-        <div className="mt-4 text-left text-sm">
-          {lines.map((l) => (
-            <div key={l.id} className="flex justify-between border-b border-stone-200 py-1">
-              <span>
-                {l.productName} ×{l.qty}
-              </span>
-              <span>{formatTmt(l.lineTotalTmt)}</span>
-            </div>
-          ))}
-        </div>
-        <dl className="mt-4 space-y-1 border-t border-stone-300 pt-2 text-left text-sm">
-          <div className="flex justify-between text-stone-600">
-            <dt>{t("pos.order.subtotal")}</dt>
-            <dd className="font-medium text-stone-900">{formatTmt(totals.subtotalTmt)}</dd>
-          </div>
-          {orderType === OrderType.TABLE && totals.serviceFeeTmt > 0 ? (
-            <div className="flex justify-between text-stone-600">
-              <dt>{t("pos.order.service", { pct: servicePct })}</dt>
-              <dd className="font-medium text-stone-900">{formatTmt(totals.serviceFeeTmt)}</dd>
-            </div>
-          ) : null}
-          {orderType === OrderType.TAKEAWAY_DELIVERY && totals.deliveryFeeTmt > 0 ? (
-            <div className="flex justify-between text-stone-600">
-              <dt>{t("pos.order.deliveryLine", { fee: deliveryFee })}</dt>
-              <dd className="font-medium text-stone-900">{formatTmt(totals.deliveryFeeTmt)}</dd>
-            </div>
-          ) : null}
-          <div className="flex justify-between border-t border-stone-900 pt-2 text-base font-bold text-stone-900">
-            <dt>{t("pos.order.total")}</dt>
-            <dd>{formatTmt(totals.totalTmt)}</dd>
-          </div>
-        </dl>
-      </div>
-    </div>
-  );
-}
 
 function buildPreviewOrder(
   draft: { type: OrderType; tableId: string | null },
@@ -533,7 +462,18 @@ export function OrderWorkspace() {
     [printedQty, viewOrder],
   );
 
-  function startReceiptPrint(mode: "full" | "new") {
+  function closeReceiptModal() {
+    if (!printJob) return;
+    const job = printJob;
+    if (job.commitCheckpoint) {
+      setPrintedQty((prev) =>
+        commitPrintedAfterPrint(prev, printLinesRef.current, job.mode),
+      );
+    }
+    setPrintJob(null);
+  }
+
+  function showReceipt(mode: "full" | "new") {
     if (!viewOrder || viewOrder.lines.length === 0) return;
     const lines =
       mode === "full"
@@ -553,21 +493,6 @@ export function OrderWorkspace() {
     printLinesRef.current = viewOrder.lines;
     setPrintJob({ mode, lines, totals, commitCheckpoint: true });
   }
-
-  useEffect(() => {
-    if (!printJob) return;
-    const job = printJob;
-    const raf = requestAnimationFrame(() => {
-      window.print();
-      if (job.commitCheckpoint) {
-        setPrintedQty((prev) =>
-          commitPrintedAfterPrint(prev, printLinesRef.current, job.mode),
-        );
-      }
-      setPrintJob(null);
-    });
-    return () => cancelAnimationFrame(raf);
-  }, [printJob]);
 
   if (!orderId && !draft) {
     return (
@@ -782,7 +707,7 @@ export function OrderWorkspace() {
                       type="button"
                       disabled={busy || viewOrder.lines.length === 0}
                       className={btnReceipt}
-                      onClick={() => startReceiptPrint("full")}
+                      onClick={() => showReceipt("full")}
                     >
                       {t("pos.order.printReceiptFull")}
                     </button>
@@ -790,7 +715,7 @@ export function OrderWorkspace() {
                       type="button"
                       disabled={busy || !hasPrintedOnce || !hasNewItems}
                       className={btnReceipt}
-                      onClick={() => startReceiptPrint("new")}
+                      onClick={() => showReceipt("new")}
                     >
                       {t("pos.order.printReceiptNew")}
                     </button>
@@ -833,19 +758,29 @@ export function OrderWorkspace() {
       </div>
 
       {printJob && order?.id ? (
-        <ReceiptPrintView
-          venueName={venueName}
-          orderId={order.id}
-          orderType={viewOrder.type}
-          tableLabel={viewOrder.table?.label ?? null}
-          timestamp={order.closedAt ?? order.openedAt}
-          lines={printJob.lines}
-          totals={printJob.totals}
-          orderTypeLabel={orderTypeLabel}
-          servicePct={servicePct}
-          deliveryFee={deliveryFee}
-          t={t}
-        />
+        <ReceiptModal
+          open
+          onClose={closeReceiptModal}
+          title={
+            printJob.mode === "new"
+              ? t("pos.order.printReceiptNew")
+              : t("pos.order.printReceiptFull")
+          }
+        >
+          <OrderReceiptView
+            venueName={venueName}
+            orderId={order.id}
+            orderType={viewOrder.type}
+            tableLabel={viewOrder.table?.label ?? null}
+            timestamp={order.closedAt ?? order.openedAt}
+            lines={printJob.lines}
+            totals={printJob.totals}
+            orderTypeLabel={orderTypeLabel}
+            servicePct={servicePct}
+            deliveryFee={deliveryFee}
+            t={t}
+          />
+        </ReceiptModal>
       ) : null}
     </div>
   );

@@ -93,6 +93,11 @@ const closeSchema = z.object({
   actorUserId: z.string().optional(),
 });
 
+const deleteOrderSchema = z.object({
+  orderId: z.string(),
+  actorUserId: z.string(),
+});
+
 const orderInclude = {
   table: { select: { id: true, label: true } },
   lines: { orderBy: { createdAt: "asc" as const } },
@@ -471,6 +476,40 @@ export async function handleOrdersChannel(
         payload: { orderId, totalTmt: closed.totalTmt },
       });
       return { ok: true as const, order: closed };
+    }
+
+    case "orders.delete": {
+      const parsed = deleteOrderSchema.safeParse(payload);
+      if (!parsed.success) return { ok: false as const, error: "Invalid input" };
+      const { orderId, actorUserId } = parsed.data;
+
+      const user = await prisma.user.findUnique({ where: { id: actorUserId } });
+      if (!user?.active) return { ok: false as const, error: "Invalid user" };
+
+      const { start, end } = getBusinessDayRange();
+      const order = await prisma.order.findFirst({
+        where: { id: orderId, openedAt: { gte: start, lt: end } },
+        include: { lines: { select: { id: true } } },
+      });
+      if (!order) {
+        return { ok: false as const, error: "Order not found or not in today's list" };
+      }
+
+      await audit(prisma, {
+        userId: actorUserId,
+        action: "orders.delete",
+        entity: "Order",
+        payload: {
+          orderId,
+          status: order.status,
+          type: order.type,
+          totalTmt: order.totalTmt,
+          lineCount: order.lines.length,
+        },
+      });
+
+      await prisma.order.delete({ where: { id: orderId } });
+      return { ok: true as const };
     }
 
     default:
