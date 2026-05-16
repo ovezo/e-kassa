@@ -23,6 +23,7 @@ import {
   type ReceiptTotals,
 } from "@/lib/pos/receipt-print";
 import { readSession, type SessionUser } from "@/lib/session";
+import { productImageDisplayUrl } from "@/lib/product-image-url";
 import { useTranslations } from "@/lib/i18n/LocaleProvider";
 
 const btn =
@@ -67,9 +68,71 @@ type ProductRow = {
   categoryId: string;
   active: boolean;
   sortOrder: number;
+  imageUrl: string | null;
 };
 
 type TableListRow = { id: string; label: string; active: boolean };
+
+const MENU_CATEGORY_VIEW_KEY = "ikassir_menu_category_view";
+
+type MenuCategoryViewMode = "list" | "tabs";
+
+function readStoredMenuViewMode(): MenuCategoryViewMode {
+  if (typeof window === "undefined") return "list";
+  try {
+    const v = window.localStorage.getItem(MENU_CATEGORY_VIEW_KEY);
+    return v === "tabs" ? "tabs" : "list";
+  } catch {
+    return "list";
+  }
+}
+
+function writeStoredMenuViewMode(mode: MenuCategoryViewMode): void {
+  try {
+    window.localStorage.setItem(MENU_CATEGORY_VIEW_KEY, mode);
+  } catch {
+    /* ignore */
+  }
+}
+
+function ProductMenuImage({ src }: { src: string }) {
+  const [failed, setFailed] = useState(false);
+  if (failed) return null;
+  return (
+    <img
+      src={src}
+      alt=""
+      className="h-[72px] w-[72px] shrink-0 rounded-xl border border-stone-100 bg-stone-50 object-cover"
+      onError={() => setFailed(true)}
+    />
+  );
+}
+
+function ProductTile({
+  product,
+  disabled,
+  onAdd,
+}: {
+  product: ProductRow;
+  disabled: boolean;
+  onAdd: (id: string) => void;
+}) {
+  const imageSrc = productImageDisplayUrl(product.imageUrl);
+  return (
+    <button
+      type="button"
+      disabled={disabled}
+      onClick={() => onAdd(product.id)}
+      className="flex min-h-[96px] w-full touch-manipulation flex-row items-stretch justify-between gap-3 rounded-2xl border border-stone-200 bg-white p-3 text-left shadow-sm transition hover:border-amber-300 hover:shadow active:scale-[0.98] disabled:opacity-50"
+    >
+      <div className="flex min-w-0 flex-1 flex-col items-start justify-between">
+        <span className="font-semibold leading-snug text-stone-900">{product.name}</span>
+        <span className="mt-2 text-sm text-stone-600">{formatTmt(product.priceTmt)}</span>
+      </div>
+      {imageSrc ? <ProductMenuImage src={imageSrc} /> : null}
+    </button>
+  );
+}
 
 function roundMoney(n: number): number {
   return Math.round(n * 100) / 100;
@@ -218,6 +281,35 @@ export function OrderWorkspace() {
     }
     return m;
   }, [storeProducts]);
+
+  const [menuViewMode, setMenuViewMode] = useState<MenuCategoryViewMode>("list");
+  const [activeCategoryId, setActiveCategoryId] = useState<string | null>(null);
+
+  const categoriesWithProducts = useMemo(
+    () => categoriesSorted.filter((c) => (productsByCategory.get(c.id) ?? []).length > 0),
+    [categoriesSorted, productsByCategory],
+  );
+
+  useEffect(() => {
+    setMenuViewMode(readStoredMenuViewMode());
+  }, []);
+
+  useEffect(() => {
+    if (categoriesWithProducts.length === 0) {
+      setActiveCategoryId(null);
+      return;
+    }
+    setActiveCategoryId((prev) =>
+      prev && categoriesWithProducts.some((c) => c.id === prev)
+        ? prev
+        : categoriesWithProducts[0].id,
+    );
+  }, [categoriesWithProducts]);
+
+  const setMenuViewModeStored = useCallback((mode: MenuCategoryViewMode) => {
+    setMenuViewMode(mode);
+    writeStoredMenuViewMode(mode);
+  }, []);
 
   const loadOrder = useCallback(async () => {
     if (!orderId) return;
@@ -497,7 +589,7 @@ export function OrderWorkspace() {
   if (!orderId && !draft) {
     return (
       <div className="space-y-4">
-        <PageHeader title={t("pos.order.title")} backHref="/pos" />
+        <PageHeader title={t("pos.order.title")} backHref="/pos/open" />
         <p className="text-stone-600">{t("pos.order.none")}</p>
         <Link href="/pos/create" className="text-amber-900 underline">
           {t("pos.order.createLink")}
@@ -509,7 +601,7 @@ export function OrderWorkspace() {
   if (!session) {
     return (
       <div className="space-y-4">
-        <PageHeader title={t("pos.order.title")} backHref="/pos" />
+        <PageHeader title={t("pos.order.title")} backHref="/pos/open" />
         <p className="text-stone-600">{t("pos.order.needLogin")}</p>
         <Link href="/login" className="text-amber-900 underline">
           {t("pos.order.loginLink")}
@@ -539,9 +631,6 @@ export function OrderWorkspace() {
   const servicePct = settings?.service_fee_percent ?? "10";
   const deliveryFee = settings?.delivery_fee_tmt ?? "3";
   const isPreview = !orderId && draft != null && order == null;
-  const subtitle = isPreview
-    ? t("pos.order.previewHint")
-    : `${viewOrder.status === OrderStatus.OPEN ? t("pos.order.statusOpen") : t("pos.order.statusClosed")} · ${viewOrder.openedBy.displayName}`;
 
   return (
     <div className="flex min-h-0 flex-1 flex-col gap-3 overflow-hidden print:min-h-0 print:overflow-visible print:gap-2">
@@ -553,9 +642,37 @@ export function OrderWorkspace() {
               {viewOrder.table ? ` · ${viewOrder.table.label}` : ""}
             </>
           }
-          subtitle={subtitle}
-          subtitleClassName="text-sm text-stone-500"
           backHref="/pos/open"
+          actions={
+            <div
+              role="group"
+              aria-label={t("pos.order.menuViewToggleAria")}
+              className="inline-flex rounded-lg border border-stone-300 bg-stone-100 p-px shadow-sm"
+            >
+              <button
+                type="button"
+                className={`min-h-8 min-w-[3.25rem] touch-manipulation rounded-md px-2 py-1 text-xs font-semibold leading-tight transition sm:min-h-9 sm:px-2.5 sm:text-[13px] ${
+                  menuViewMode === "list"
+                    ? "bg-white text-stone-900 shadow-sm"
+                    : "text-stone-600 hover:text-stone-900"
+                }`}
+                onClick={() => setMenuViewModeStored("list")}
+              >
+                {t("pos.order.menuViewList")}
+              </button>
+              <button
+                type="button"
+                className={`min-h-8 min-w-[3.25rem] touch-manipulation rounded-md px-2 py-1 text-xs font-semibold leading-tight transition sm:min-h-9 sm:px-2.5 sm:text-[13px] ${
+                  menuViewMode === "tabs"
+                    ? "bg-white text-stone-900 shadow-sm"
+                    : "text-stone-600 hover:text-stone-900"
+                }`}
+                onClick={() => setMenuViewModeStored("tabs")}
+              >
+                {t("pos.order.menuViewTabs")}
+              </button>
+            </div>
+          }
         />
       </div>
 
@@ -564,43 +681,76 @@ export function OrderWorkspace() {
       ) : null}
 
       <div className="flex min-h-0 flex-1 flex-row gap-0 overflow-hidden rounded-2xl border border-stone-200 bg-stone-50/50 print:hidden">
-        <section className="min-h-0 min-w-0 flex-1 overflow-y-auto overscroll-contain border-r border-stone-200 p-4 sm:p-5">
-          <h2 className="mb-4 text-lg font-semibold text-stone-800">{t("pos.order.menu")}</h2>
-          <div className="space-y-10">
-            {categoriesSorted.map((cat) => {
-              const plist = productsByCategory.get(cat.id) ?? [];
-              if (plist.length === 0) return null;
-              return (
-                <div key={cat.id} id={`cat-${cat.id}`} className="scroll-mt-2">
-                  <h3 className="mb-3 border-b border-stone-200 pb-2 text-xl font-semibold text-stone-900">
-                    {cat.name}
-                  </h3>
-                  <div className="grid grid-cols-3 gap-3">
-                    {plist.map((p) => (
+        <section className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden border-r border-stone-200 p-4 sm:p-5">
+          {menuViewMode === "tabs" ? (
+            <>
+              <div className="shrink-0 overflow-x-auto overscroll-x-contain border-b border-stone-200 pb-3">
+                <div className="flex w-max min-w-full gap-1.5">
+                  {categoriesWithProducts.map((cat) => {
+                    const active = cat.id === activeCategoryId;
+                    return (
                       <button
-                        key={p.id}
+                        key={cat.id}
                         type="button"
-                        disabled={busy || !canAddFromMenu}
-                        onClick={() => void addProduct(p.id)}
-                        className="flex min-h-[96px] touch-manipulation flex-col items-start justify-between rounded-2xl border border-stone-200 bg-white p-3 text-left shadow-sm transition hover:border-amber-300 hover:shadow active:scale-[0.98] disabled:opacity-50"
+                        className={`shrink-0 touch-manipulation rounded-xl border px-4 py-2.5 text-base font-semibold transition active:scale-[0.99] ${
+                          active
+                            ? "border-stone-900 bg-stone-900 text-white shadow-sm"
+                            : "border-stone-200 bg-white text-stone-800 hover:border-amber-300 hover:bg-amber-50/60"
+                        }`}
+                        onClick={() => setActiveCategoryId(cat.id)}
                       >
-                        <span className="font-semibold leading-snug text-stone-900">{p.name}</span>
-                        <span className="mt-2 text-sm text-stone-600">{formatTmt(p.priceTmt)}</span>
+                        {cat.name}
                       </button>
+                    );
+                  })}
+                </div>
+              </div>
+              <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain pt-4">
+                {activeCategoryId ? (
+                  <div className="grid grid-cols-4 gap-3">
+                    {(productsByCategory.get(activeCategoryId) ?? []).map((p) => (
+                      <ProductTile
+                        key={p.id}
+                        product={p}
+                        disabled={busy || !canAddFromMenu}
+                        onAdd={() => void addProduct(p.id)}
+                      />
                     ))}
                   </div>
-                </div>
-              );
-            })}
-          </div>
+                ) : null}
+              </div>
+            </>
+          ) : (
+            <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain">
+              <div className="space-y-10">
+                {categoriesSorted.map((cat) => {
+                  const plist = productsByCategory.get(cat.id) ?? [];
+                  if (plist.length === 0) return null;
+                  return (
+                    <div key={cat.id} id={`cat-${cat.id}`} className="scroll-mt-2">
+                      <h3 className="mb-3 border-b border-stone-200 pb-2 text-xl font-semibold text-stone-900">
+                        {cat.name}
+                      </h3>
+                      <div className="grid grid-cols-4 gap-3">
+                        {plist.map((p) => (
+                          <ProductTile
+                            key={p.id}
+                            product={p}
+                            disabled={busy || !canAddFromMenu}
+                            onAdd={() => void addProduct(p.id)}
+                          />
+                        ))}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
         </section>
 
-        <aside className="flex h-full min-h-0 w-[min(100%,420px)] min-w-[240px] shrink-0 flex-col self-stretch border-l border-stone-200 bg-white">
-          <div className="shrink-0 border-b border-stone-100 px-4 py-3 sm:px-5">
-            <h2 className="text-lg font-semibold text-stone-800">{t("pos.order.cart")}</h2>
-          </div>
-
-          <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 sm:px-5">
+        <aside className="flex h-full min-h-0 w-[min(100%,300px)] min-w-[300px] shrink-0 flex-col self-stretch border-l border-stone-200 bg-white">
+          <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 pt-4 sm:px-5">
             <ul className="divide-y divide-stone-100">
               {viewOrder.lines.length === 0 ? (
                 <li className="py-8 text-center text-stone-500">{t("pos.order.cartEmpty")}</li>
@@ -626,9 +776,9 @@ export function OrderWorkspace() {
                         {formatTmt(line.lineTotalTmt)}
                       </span>
                     </div>
-                    <p className="mt-0.5 text-sm text-stone-500">
+                    {/* <p className="mt-0.5 text-sm text-stone-500">
                       {formatTmt(line.unitPriceTmt)} {t("pos.order.each")}
-                    </p>
+                    </p> */}
                     {orderIsOpen ? (
                       <div className="mt-3 flex flex-wrap items-center gap-2">
                         <button
@@ -655,7 +805,7 @@ export function OrderWorkspace() {
                         <button
                           type="button"
                           disabled={busy}
-                          className={btnDanger}
+                          className={`${btnDanger} ml-auto`}
                           onClick={() => void removeLine(line.id)}
                         >
                           {t("pos.order.remove")}
@@ -675,10 +825,12 @@ export function OrderWorkspace() {
 
           <div className="shrink-0 space-y-2 border-t border-stone-200 bg-stone-50/80 px-4 py-4 sm:px-5">
             <dl className="space-y-1.5 text-sm">
-              <div className="flex justify-between text-stone-600">
-                <dt>{t("pos.order.subtotal")}</dt>
-                <dd className="font-medium text-stone-900">{formatTmt(viewOrder.subtotalTmt)}</dd>
-              </div>
+              {viewOrder.type !== OrderType.TAKEAWAY_PICKUP ? (
+                <div className="flex justify-between text-stone-600">
+                  <dt>{t("pos.order.subtotal")}</dt>
+                  <dd className="font-medium text-stone-900">{formatTmt(viewOrder.subtotalTmt)}</dd>
+                </div>
+              ) : null}
               {viewOrder.type === OrderType.TABLE ? (
                 <div className="flex justify-between text-stone-600">
                   <dt>{t("pos.order.service", { pct: servicePct })}</dt>
@@ -691,7 +843,7 @@ export function OrderWorkspace() {
                   <dd className="font-medium text-stone-900">{formatTmt(viewOrder.deliveryFeeTmt)}</dd>
                 </div>
               ) : null}
-              <div className="flex justify-between border-t border-stone-200 pt-2 text-base font-bold text-stone-900">
+              <div className="flex justify-between text-base font-bold text-stone-900">
                 <dt>{t("pos.order.total")}</dt>
                 <dd>{formatTmt(viewOrder.totalTmt)}</dd>
               </div>

@@ -24,7 +24,7 @@ export default function LoginPage() {
 
   const redirectIfSession = useCallback(() => {
     if (readSession()) {
-      router.replace("/pos");
+      router.replace("/pos/open");
     }
   }, [router]);
 
@@ -64,7 +64,7 @@ export default function LoginPage() {
         return;
       }
       saveSession(res.user);
-      router.replace("/pos");
+      router.replace("/pos/open");
     } catch {
       setError(t("login.errNetwork"));
     } finally {

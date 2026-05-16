@@ -56,10 +56,8 @@ export default function PosLayout({ children }: { children: ReactNode }) {
   return (
     <div className="flex h-dvh max-h-dvh min-h-0 flex-col overflow-hidden bg-stone-50 print:h-auto print:max-h-none print:min-h-0 print:overflow-visible">
       <header className="shrink-0 border-b border-stone-200 bg-white print:hidden">
-        <div className="mx-auto flex w-full max-w-6xl flex-wrap items-center gap-3 px-4 py-3 sm:px-6">
-          <span className="text-lg font-semibold text-stone-800">{t("common.brand")}</span>
+        <div className="mx-auto flex w-full flex-wrap items-center gap-3 px-4 py-3 sm:px-6">
           <nav className="flex flex-wrap items-center gap-1">
-            {navLink("/pos", t("pos.nav.home"))}
             {navLink("/pos/create", t("pos.nav.createOrder"))}
             {navLink("/pos/open", t("pos.nav.openOrders"))}
             {navLink("/pos/history", t("pos.nav.today"))}
@@ -87,7 +85,7 @@ export default function PosLayout({ children }: { children: ReactNode }) {
       </header>
       <main className="flex min-h-0 flex-1 flex-col overflow-hidden print:overflow-visible print:pt-0">
         <div
-          className={`mx-auto flex min-h-0 w-full max-w-6xl flex-1 flex-col px-4 py-6 sm:px-6 print:max-w-none print:px-4 print:py-2 ${
+          className={`mx-auto flex min-h-0 w-full flex-1 flex-col px-4 py-3 sm:px-6 print:max-w-none print:px-4 print:py-2 ${
             orderShell
               ? "overflow-hidden"
               : "overflow-y-auto overscroll-y-contain"

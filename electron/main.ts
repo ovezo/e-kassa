@@ -4,6 +4,7 @@ import http from "http";
 import path from "path";
 import { spawn, type ChildProcess } from "child_process";
 import { app, BrowserWindow } from "electron";
+import { PRODUCT_IMAGES_DEV_POINTER_FILENAME } from "../src/lib/server/product-images";
 import { ensureDatabase } from "./db/bootstrap";
 import { getPrisma, disconnectPrisma } from "./db/prisma";
 import { registerIpcHandlers } from "./ipc/register";
@@ -25,6 +26,11 @@ function resolveDbPath(): string {
     return path.join(app.getPath("userData"), "ikassir.db");
   }
   return path.join(appRoot(), "prisma", "dev.db");
+}
+
+/** Writable product photos — always under Electron `userData` (dev + prod) so IPC and Next match shipped behavior. */
+function resolveProductImagesDir(): string {
+  return path.join(app.getPath("userData"), "product-images");
 }
 
 function getFreePort(): Promise<number> {
@@ -79,6 +85,8 @@ async function ensureRendererBaseUrl(): Promise<string> {
   const root = appRoot();
   const nextCli = path.join(root, "node_modules", "next", "dist", "bin", "next");
 
+  const imagesRoot = process.env.IKASSIR_PRODUCT_IMAGES_ROOT?.trim() || path.join(root, "product-images");
+
   nextChild = spawn(process.execPath, [nextCli, "start", "-p", String(port), "-H", "127.0.0.1"], {
     cwd: root,
     env: {
@@ -86,6 +94,7 @@ async function ensureRendererBaseUrl(): Promise<string> {
       ELECTRON_RUN_AS_NODE: "1",
       PORT: String(port),
       NODE_ENV: "production",
+      IKASSIR_PRODUCT_IMAGES_ROOT: imagesRoot,
     },
     stdio: "pipe",
   });
@@ -138,7 +147,22 @@ app.whenReady().then(() => {
   if (!fs.existsSync(dbDir)) {
     fs.mkdirSync(dbDir, { recursive: true });
   }
+  const productImagesDir = resolveProductImagesDir();
+  process.env.IKASSIR_PRODUCT_IMAGES_ROOT = productImagesDir;
+  if (!fs.existsSync(productImagesDir)) {
+    fs.mkdirSync(productImagesDir, { recursive: true });
+  }
   console.error("[iKassir] Database path:", dbPath);
+  console.error("[iKassir] Product images dir:", productImagesDir);
+
+  if (isNextDevSession && !app.isPackaged) {
+    try {
+      const pointerPath = path.join(appRoot(), PRODUCT_IMAGES_DEV_POINTER_FILENAME);
+      fs.writeFileSync(pointerPath, `${productImagesDir}\n`, "utf8");
+    } catch (e) {
+      console.error("[iKassir] Failed to write", PRODUCT_IMAGES_DEV_POINTER_FILENAME, "for Next dev:", e);
+    }
+  }
 
   if (app.isPackaged) {
     try {

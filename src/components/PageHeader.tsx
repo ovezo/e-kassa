@@ -4,7 +4,7 @@ import { usePathname, useRouter } from "next/navigation";
 import type { ReactNode } from "react";
 import { useTranslations } from "@/lib/i18n/LocaleProvider";
 
-const ROOT_PATHS = new Set(["/pos", "/login", "/setup", "/admin/dashboard"]);
+const ROOT_PATHS = new Set(["/pos/open", "/login", "/setup", "/admin/dashboard"]);
 
 type PageHeaderProps = {
   title: ReactNode;
@@ -41,17 +41,28 @@ export function PageHeader({
   }
 
   return (
-    <div className={`flex flex-wrap items-start justify-between gap-3 ${className}`}>
+    <div className={`flex flex-wrap items-start justify-between items-center gap-3 ${className}`}>
       <div className="flex min-w-0 flex-1 flex-col">
         {shouldShowBack ? (
-          <div className="flex items-center gap-0.5 sm:gap-1">
+          <div className="flex items-center gap-0.5 sm:gap-1 ml-1">
             <button
               type="button"
               onClick={goBack}
               aria-label={t("common.back")}
-              className="-ml-1 flex h-11 min-h-[44px] w-11 min-w-[44px] shrink-0 touch-manipulation items-center justify-center rounded-xl text-3xl font-medium leading-none text-stone-700 hover:bg-stone-200 active:scale-[0.98]"
+              className="-ml-1 flex h-9 w-8 shrink-0 touch-manipulation items-center justify-center rounded-xl text-stone-700 hover:bg-stone-200 active:scale-[0.98]"
             >
-              &#8249;
+              <svg
+                viewBox="0 0 24 24"
+                className="h-5 w-5"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                aria-hidden
+              >
+                <path d="M15 18l-6-6 6-6" />
+              </svg>
             </button>
             <h1 className={`${titleClassName} min-w-0`}>{title}</h1>
           </div>

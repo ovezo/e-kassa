@@ -25,7 +25,7 @@ export default function SetupPage() {
 
   const redirectIfSession = useCallback(() => {
     if (readSession()) {
-      router.replace("/pos");
+      router.replace("/pos/open");
     }
   }, [router]);
 
@@ -66,7 +66,7 @@ export default function SetupPage() {
         return;
       }
       saveSession(res.user);
-      router.replace("/pos");
+      router.replace("/pos/open");
     } catch {
       setError(t("setup.errComplete"));
     } finally {

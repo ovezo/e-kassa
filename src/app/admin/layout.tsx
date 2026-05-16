@@ -20,7 +20,7 @@ export default function AdminLayout({ children }: { children: ReactNode }) {
       return;
     }
     if (s.role !== "ADMIN") {
-      router.replace("/pos");
+      router.replace("/pos/open");
       return;
     }
     setUser(s);
@@ -73,7 +73,7 @@ export default function AdminLayout({ children }: { children: ReactNode }) {
         <div className="ml-auto flex flex-wrap items-center justify-end gap-3">
           <LanguageSwitcher variant="amber" />
           <Link
-            href="/pos"
+            href="/pos/open"
             className="min-h-[44px] touch-manipulation rounded-xl px-4 py-2.5 text-base font-medium text-amber-900 underline"
           >
             {t("admin.backPos")}

@@ -1,13 +1,15 @@
 "use client";
 
-import Link from "next/link";
 import { PageHeader } from "@/components/PageHeader";
 import { DaySummaryReceiptView, type DaySummaryData } from "@/components/DaySummaryPrintView";
+import { OrderReceiptView } from "@/components/OrderReceiptView";
 import { ReceiptModal } from "@/components/ReceiptModal";
+import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
 import { OrderStatus, OrderType } from "@prisma/client";
 import { ikassirInvoke } from "@/lib/electron-api";
 import { formatTmt } from "@/lib/format-money";
+import { receiptLinesForFull } from "@/lib/pos/receipt-print";
 import { useLocale, useTranslations } from "@/lib/i18n/LocaleProvider";
 import { readSession } from "@/lib/session";
 
@@ -30,6 +32,62 @@ type DayRow = {
   _count: { lines: number };
 };
 
+/** Matches `orders.get` include payload for receipt modal. */
+type OrderDetailForReceipt = {
+  id: string;
+  type: OrderType;
+  status: OrderStatus;
+  openedAt: string;
+  closedAt: string | null;
+  table: { id: string; label: string } | null;
+  lines: Array<{
+    id: string;
+    productName: string;
+    unitPriceTmt: number;
+    qty: number;
+    lineTotalTmt: number;
+  }>;
+  subtotalTmt: number;
+  serviceFeeTmt: number;
+  deliveryFeeTmt: number;
+  totalTmt: number;
+};
+
+function HistoryOrderCardSummary({
+  o,
+  typeLabel,
+  t,
+}: {
+  o: DayRow;
+  typeLabel: (ot: OrderType) => string;
+  t: (key: string, params?: Record<string, string>) => string;
+}) {
+  return (
+    <>
+      <div className="flex items-start justify-between gap-2">
+        <span className="text-lg font-semibold text-stone-900">
+          {typeLabel(o.type)}
+          {o.table ? ` · ${o.table.label}` : ""}
+        </span>
+        <span
+          className={
+            o.status === OrderStatus.OPEN
+              ? "rounded-full bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-950"
+              : "rounded-full bg-stone-200 px-2 py-0.5 text-xs font-medium text-stone-800"
+          }
+        >
+          {o.status === OrderStatus.OPEN ? t("pos.history.badgeOpen") : t("pos.history.badgeClosed")}
+        </span>
+      </div>
+      <p className="mt-2 text-sm text-stone-500">{o.openedBy.displayName}</p>
+      <p className="mt-1 text-sm text-stone-500">
+        {new Date(o.openedAt).toLocaleString()} · {t("pos.history.linesMeta", { count: String(o._count.lines) })}
+      </p>
+      <p className="mt-3 text-xl font-bold text-stone-900">{formatTmt(o.totalTmt)}</p>
+    </>
+  );
+}
+
 export default function PosHistoryPage() {
   const t = useTranslations();
   const { locale } = useLocale();
@@ -39,19 +97,29 @@ export default function PosHistoryPage() {
   const [daySummary, setDaySummary] = useState<DaySummaryData | null>(null);
   const [summaryBusy, setSummaryBusy] = useState(false);
   const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [receiptBusyId, setReceiptBusyId] = useState<string | null>(null);
+  const [orderReceipt, setOrderReceipt] = useState<{
+    order: OrderDetailForReceipt;
+    venueName: string;
+    servicePct: string;
+    deliveryFee: string;
+  } | null>(null);
 
-  function typeLabel(ot: OrderType): string {
-    switch (ot) {
-      case OrderType.TABLE:
-        return t("pos.order.type.table");
-      case OrderType.TAKEAWAY_PICKUP:
-        return t("pos.order.type.pickup");
-      case OrderType.TAKEAWAY_DELIVERY:
-        return t("pos.order.type.delivery");
-      default:
-        return ot;
-    }
-  }
+  const orderTypeLabel = useCallback(
+    (type: OrderType) => {
+      switch (type) {
+        case OrderType.TABLE:
+          return t("pos.order.type.table");
+        case OrderType.TAKEAWAY_PICKUP:
+          return t("pos.order.type.pickup");
+        case OrderType.TAKEAWAY_DELIVERY:
+          return t("pos.order.type.delivery");
+        default:
+          return type;
+      }
+    },
+    [t],
+  );
 
   const load = useCallback(async () => {
     setError(null);
@@ -77,6 +145,34 @@ export default function PosHistoryPage() {
       setError(e instanceof Error ? e.message : "Failed to load summary");
     } finally {
       setSummaryBusy(false);
+    }
+  }
+
+  async function openClosedOrderReceipt(o: DayRow) {
+    if (o.status !== OrderStatus.CLOSED) return;
+    setReceiptBusyId(o.id);
+    setError(null);
+    try {
+      const [orderRes, settings] = await Promise.all([
+        ikassirInvoke<
+          { ok: true; order: OrderDetailForReceipt } | { ok: false; error?: string }
+        >("orders.get", { id: o.id }),
+        ikassirInvoke<Record<string, string>>("settings.getAll"),
+      ]);
+      if (!orderRes.ok) {
+        setError(orderRes.error ?? "Order not found");
+        return;
+      }
+      setOrderReceipt({
+        order: orderRes.order,
+        venueName: settings.venue_name ?? "Coffee Shop",
+        servicePct: settings.service_fee_percent ?? "10",
+        deliveryFee: settings.delivery_fee_tmt ?? "3",
+      });
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Failed to load receipt");
+    } finally {
+      setReceiptBusyId(null);
     }
   }
 
@@ -113,7 +209,7 @@ export default function PosHistoryPage() {
       <PageHeader
         title={t("pos.history.title")}
         subtitle={t("pos.history.subtitle")}
-        backHref="/pos"
+        backHref="/pos/open"
         actions={
           <div className="flex flex-wrap gap-2">
             <button
@@ -140,31 +236,23 @@ export default function PosHistoryPage() {
       <ul className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
         {orders.map((o) => (
           <li key={o.id} className={cardClass}>
-            <Link
-              href={`/pos/order?id=${o.id}`}
-              className="block touch-manipulation active:scale-[0.99]"
-            >
-              <div className="flex items-start justify-between gap-2">
-                <span className="text-lg font-semibold text-stone-900">
-                  {typeLabel(o.type)}
-                  {o.table ? ` · ${o.table.label}` : ""}
-                </span>
-                <span
-                  className={
-                    o.status === OrderStatus.OPEN
-                      ? "rounded-full bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-950"
-                      : "rounded-full bg-stone-200 px-2 py-0.5 text-xs font-medium text-stone-800"
-                  }
-                >
-                  {o.status === OrderStatus.OPEN ? t("pos.history.badgeOpen") : t("pos.history.badgeClosed")}
-                </span>
-              </div>
-              <p className="mt-2 text-sm text-stone-500">{o.openedBy.displayName}</p>
-              <p className="mt-1 text-sm text-stone-500">
-                {new Date(o.openedAt).toLocaleString()} · {t("pos.history.linesMeta", { count: String(o._count.lines) })}
-              </p>
-              <p className="mt-3 text-xl font-bold text-stone-900">{formatTmt(o.totalTmt)}</p>
-            </Link>
+            {o.status === OrderStatus.OPEN ? (
+              <Link
+                href={`/pos/order?id=${o.id}`}
+                className="block touch-manipulation active:scale-[0.99]"
+              >
+                <HistoryOrderCardSummary o={o} typeLabel={orderTypeLabel} t={t} />
+              </Link>
+            ) : (
+              <button
+                type="button"
+                className="block w-full touch-manipulation text-left active:scale-[0.99] disabled:cursor-wait disabled:opacity-60"
+                disabled={receiptBusyId === o.id}
+                onClick={() => void openClosedOrderReceipt(o)}
+              >
+                <HistoryOrderCardSummary o={o} typeLabel={orderTypeLabel} t={t} />
+              </button>
+            )}
             <div className="mt-4 border-t border-stone-100 pt-3">
               <button
                 type="button"
@@ -192,6 +280,33 @@ export default function PosHistoryPage() {
             summary={daySummary}
             t={t}
             locale={locale === "ru" ? "ru-RU" : "en-US"}
+          />
+        </ReceiptModal>
+      ) : null}
+
+      {orderReceipt ? (
+        <ReceiptModal
+          open
+          onClose={() => setOrderReceipt(null)}
+          title={t("pos.order.printReceiptFull")}
+        >
+          <OrderReceiptView
+            venueName={orderReceipt.venueName}
+            orderId={orderReceipt.order.id}
+            orderType={orderReceipt.order.type}
+            tableLabel={orderReceipt.order.table?.label ?? null}
+            timestamp={orderReceipt.order.closedAt ?? orderReceipt.order.openedAt}
+            lines={receiptLinesForFull(orderReceipt.order.lines)}
+            totals={{
+              subtotalTmt: orderReceipt.order.subtotalTmt,
+              serviceFeeTmt: orderReceipt.order.serviceFeeTmt,
+              deliveryFeeTmt: orderReceipt.order.deliveryFeeTmt,
+              totalTmt: orderReceipt.order.totalTmt,
+            }}
+            orderTypeLabel={orderTypeLabel}
+            servicePct={orderReceipt.servicePct}
+            deliveryFee={orderReceipt.deliveryFee}
+            t={t}
           />
         </ReceiptModal>
       ) : null}

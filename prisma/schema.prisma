@@ -49,6 +49,8 @@ model Product {
   id         String      @id @default(cuid())
   name       String
   priceTmt   Float
+  /** Public path served by GET /api/product-images/… (filesystem under product-images/). */
+  imageUrl   String?
   categoryId String
   category   Category    @relation(fields: [categoryId], references: [id])
   active     Boolean     @default(true)

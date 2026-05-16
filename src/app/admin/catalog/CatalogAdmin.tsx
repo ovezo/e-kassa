@@ -20,6 +20,7 @@ import { CSS } from "@dnd-kit/utilities";
 import { useCallback, useEffect, useMemo, useState, type FormEvent, type ReactNode, type SVGProps } from "react";
 import { ikassirInvoke } from "@/lib/electron-api";
 import { formatTmt } from "@/lib/format-money";
+import { productImageDisplayUrl } from "@/lib/product-image-url";
 import { readSession } from "@/lib/session";
 
 type Tab = "categories" | "products" | "tables";
@@ -34,6 +35,38 @@ const input =
   "mt-1 w-full min-h-[48px] touch-manipulation rounded-xl border border-stone-300 px-4 py-3 text-base outline-none focus:ring-2 focus:ring-stone-400";
 const tabBtn =
   "min-h-[48px] touch-manipulation rounded-xl px-5 py-3 text-base font-medium";
+
+const MAX_PRODUCT_IMAGE_BYTES = 2 * 1024 * 1024;
+
+function uint8ToBase64(bytes: Uint8Array): string {
+  let s = "";
+  const chunk = 0x8000;
+  for (let i = 0; i < bytes.length; i += chunk) {
+    s += String.fromCharCode(...bytes.subarray(i, Math.min(i + chunk, bytes.length)));
+  }
+  return btoa(s);
+}
+
+async function readImageFileForUpload(
+  file: File,
+): Promise<
+  | { ok: true; imageBase64: string; imageMimeType: "image/jpeg" | "image/png" | "image/webp" | "image/gif" }
+  | { ok: false; error: string }
+> {
+  const allowed = ["image/jpeg", "image/png", "image/webp", "image/gif"] as const;
+  if (!allowed.includes(file.type as (typeof allowed)[number])) {
+    return { ok: false, error: "Use JPEG, PNG, WebP, or GIF." };
+  }
+  if (file.size > MAX_PRODUCT_IMAGE_BYTES) {
+    return { ok: false, error: "Image too large (max 2 MB)." };
+  }
+  const buf = await file.arrayBuffer();
+  if (buf.byteLength > MAX_PRODUCT_IMAGE_BYTES) {
+    return { ok: false, error: "Image too large (max 2 MB)." };
+  }
+  const mime = file.type as (typeof allowed)[number];
+  return { ok: true, imageBase64: uint8ToBase64(new Uint8Array(buf)), imageMimeType: mime };
+}
 
 type CategoryRow = {
   id: string;
@@ -50,6 +83,7 @@ type ProductRow = {
   categoryId: string;
   active: boolean;
   sortOrder: number;
+  imageUrl: string | null;
   category: { name: string };
 };
 
@@ -112,7 +146,17 @@ function SortableRow({
 }
 
 type CategoryEditForm = { id: string; name: string; active: boolean };
-type ProductEditForm = { id: string; name: string; priceTmt: number; categoryId: string; active: boolean };
+type ProductEditForm = {
+  id: string;
+  name: string;
+  priceTmt: number;
+  categoryId: string;
+  active: boolean;
+  imageUrl: string | null;
+  pendingImageBase64: string | null;
+  pendingImageMime: "image/jpeg" | "image/png" | "image/webp" | "image/gif" | null;
+  clearImage: boolean;
+};
 type TableEditForm = { id: string; label: string; active: boolean };
 
 function InactiveBadge() {
@@ -157,19 +201,21 @@ function ProductBlock({
   onCancelEdit,
   onReorder,
   onDelete,
+  onImageError,
 }: {
   category: CategoryRow;
   productList: ProductRow[];
   busy: boolean;
   categories: CategoryRow[];
   editingProductId: string | null;
-  editProduct: { id: string; name: string; priceTmt: number; categoryId: string; active: boolean } | null;
+  editProduct: ProductEditForm | null;
   onStartEdit: (p: ProductRow) => void;
   onEditChange: (patch: Partial<ProductEditForm>) => void;
   onSaveEdit: () => void;
   onCancelEdit: () => void;
   onReorder: (categoryId: string, orderedIds: string[]) => Promise<void>;
   onDelete: (id: string) => void;
+  onImageError: (message: string) => void;
 }) {
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 8 } }),
@@ -248,16 +294,86 @@ function ProductBlock({
                         />
                         Active in POS
                       </label>
+                      <div className="w-full basis-full">
+                        <label className="text-sm font-medium text-stone-600">Photo (optional)</label>
+                        <div className="mt-1 flex flex-wrap items-center gap-3">
+                          {editProduct.imageUrl &&
+                          !editProduct.clearImage &&
+                          !editProduct.pendingImageBase64 ? (
+                            <img
+                              src={productImageDisplayUrl(editProduct.imageUrl) ?? ""}
+                              alt=""
+                              className="h-16 w-16 rounded-lg border border-stone-200 object-cover"
+                            />
+                          ) : null}
+                          {editProduct.pendingImageBase64 && editProduct.pendingImageMime ? (
+                            <span className="text-sm text-amber-900">New image selected — save to apply.</span>
+                          ) : null}
+                          {editProduct.clearImage ? (
+                            <span className="text-sm text-stone-500">Photo will be removed when you save.</span>
+                          ) : null}
+                          <input
+                            type="file"
+                            accept="image/jpeg,image/png,image/webp,image/gif"
+                            className="max-w-full text-sm text-stone-700"
+                            onChange={(e) => {
+                              const f = e.target.files?.[0];
+                              e.target.value = "";
+                              if (!f) return;
+                              void readImageFileForUpload(f).then((r) => {
+                                if (!r.ok) {
+                                  onImageError(r.error);
+                                  return;
+                                }
+                                onEditChange({
+                                  pendingImageBase64: r.imageBase64,
+                                  pendingImageMime: r.imageMimeType,
+                                  clearImage: false,
+                                });
+                              });
+                            }}
+                          />
+                          {(editProduct.imageUrl || editProduct.pendingImageBase64) &&
+                          !editProduct.clearImage ? (
+                            <button
+                              type="button"
+                              className={btn}
+                              disabled={busy}
+                              onClick={() =>
+                                onEditChange({
+                                  clearImage: true,
+                                  pendingImageBase64: null,
+                                  pendingImageMime: null,
+                                })
+                              }
+                            >
+                              Remove photo
+                            </button>
+                          ) : null}
+                        </div>
+                      </div>
                       <EditActions busy={busy} onSave={onSaveEdit} onCancel={onCancelEdit} />
                     </div>
                   ) : (
                     <>
-                      <div className="flex min-w-0 flex-col gap-0.5">
-                        <span className="font-medium text-stone-900">
-                          {p.name}
-                          {!p.active ? <InactiveBadge /> : null}
-                        </span>
-                        <span className="text-sm text-stone-500">{formatTmt(p.priceTmt)}</span>
+                      <div className="flex min-w-0 flex-1 items-center gap-3">
+                        {p.imageUrl ? (
+                          <img
+                            src={productImageDisplayUrl(p.imageUrl) ?? ""}
+                            alt=""
+                            className="hidden h-14 w-14 shrink-0 rounded-lg border border-stone-200 object-cover sm:block"
+                            onError={(e) => {
+                              e.currentTarget.style.display = "none";
+                            }}
+                          />
+                        ) : null}
+                        <div className="flex min-w-0 flex-1 flex-col gap-0.5">
+                          <span className="font-medium text-stone-900">
+                            {p.name}
+                            {!p.active ? <InactiveBadge /> : null}
+                          </span>
+                          <span className="text-sm text-stone-500">{formatTmt(p.priceTmt)}</span>
+                        </div>
                       </div>
                       <div className="flex shrink-0 flex-wrap gap-2">
                         <button
@@ -304,6 +420,10 @@ export function CatalogAdmin() {
     priceTmt: 0,
     categoryId: "",
   });
+  const [createProductImage, setCreateProductImage] = useState<{
+    imageBase64: string;
+    imageMimeType: "image/jpeg" | "image/png" | "image/webp" | "image/gif";
+  } | null>(null);
 
   const [tables, setTables] = useState<TableRow[]>([]);
   const [tableForm, setTableForm] = useState({ label: "" });
@@ -316,6 +436,7 @@ export function CatalogAdmin() {
     setEditCategory(null);
     setEditProduct(null);
     setEditTable(null);
+    setCreateProductImage(null);
   }
 
   const sensors = useSensors(
@@ -511,10 +632,12 @@ export function CatalogAdmin() {
         priceTmt: prodForm.priceTmt,
         categoryId: prodForm.categoryId,
         actorUserId: actorId,
+        ...(createProductImage ?? {}),
       });
       if (!res.ok) setError(res.error ?? "Failed");
       else {
         setProdForm({ name: "", priceTmt: 0, categoryId: "" });
+        setCreateProductImage(null);
         await loadProducts();
       }
     } catch (err) {
@@ -563,6 +686,13 @@ export function CatalogAdmin() {
         categoryId: editProduct.categoryId,
         active: editProduct.active,
         actorUserId: actorId,
+        ...(editProduct.pendingImageBase64 && editProduct.pendingImageMime
+          ? {
+              imageBase64: editProduct.pendingImageBase64,
+              imageMimeType: editProduct.pendingImageMime,
+            }
+          : {}),
+        ...(editProduct.clearImage ? { clearImage: true } : {}),
       });
       if (!res.ok) setError(res.error ?? "Failed");
       else {
@@ -824,6 +954,44 @@ export function CatalogAdmin() {
                 Add product
               </button>
             </div>
+            <div className="sm:col-span-2 lg:col-span-4">
+              <label className="text-sm font-medium text-stone-600">Photo (optional)</label>
+              <div className="mt-1 flex flex-wrap items-center gap-3">
+                {createProductImage ? (
+                  <span className="text-sm text-amber-900">Image selected — will upload when you add the product.</span>
+                ) : null}
+                <input
+                  type="file"
+                  accept="image/jpeg,image/png,image/webp,image/gif"
+                  className="max-w-full text-sm text-stone-700"
+                  onChange={(e) => {
+                    const f = e.target.files?.[0];
+                    e.target.value = "";
+                    if (!f) return;
+                    void readImageFileForUpload(f).then((r) => {
+                      if (!r.ok) {
+                        setError(r.error);
+                        return;
+                      }
+                      setCreateProductImage({
+                        imageBase64: r.imageBase64,
+                        imageMimeType: r.imageMimeType,
+                      });
+                    });
+                  }}
+                />
+                {createProductImage ? (
+                  <button
+                    type="button"
+                    className={btn}
+                    disabled={busy}
+                    onClick={() => setCreateProductImage(null)}
+                  >
+                    Clear photo
+                  </button>
+                ) : null}
+              </div>
+            </div>
           </form>
           <p className="text-sm text-stone-500">
             New products are added at the end of their category. Drag by the grip to reorder within the category.
@@ -851,6 +1019,10 @@ export function CatalogAdmin() {
                       priceTmt: p.priceTmt,
                       categoryId: p.categoryId,
                       active: p.active,
+                      imageUrl: p.imageUrl ?? null,
+                      pendingImageBase64: null,
+                      pendingImageMime: null,
+                      clearImage: false,
                     })
                   }
                   onEditChange={(patch) =>
@@ -871,6 +1043,7 @@ export function CatalogAdmin() {
                     }
                   }}
                   onDelete={(id) => void deleteProduct(id)}
+                  onImageError={(message) => setError(message)}
                 />
               );
             })}

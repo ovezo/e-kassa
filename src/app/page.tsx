@@ -12,7 +12,7 @@ export default function HomePage() {
   useEffect(() => {
     const session = readSession();
     if (session) {
-      router.replace("/pos");
+      router.replace("/pos/open");
     } else {
       router.replace("/login");
     }

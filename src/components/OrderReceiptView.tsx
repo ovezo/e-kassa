@@ -53,10 +53,12 @@ export function OrderReceiptView({
         ))}
       </div>
       <dl className="mt-4 space-y-1 border-t border-stone-300 pt-2 text-left text-sm">
-        <div className="flex justify-between text-stone-600">
-          <dt>{t("pos.order.subtotal")}</dt>
-          <dd className="font-medium text-stone-900">{formatTmt(totals.subtotalTmt)}</dd>
-        </div>
+        {orderType !== OrderType.TAKEAWAY_PICKUP ? (
+          <div className="flex justify-between text-stone-600">
+            <dt>{t("pos.order.subtotal")}</dt>
+            <dd className="font-medium text-stone-900">{formatTmt(totals.subtotalTmt)}</dd>
+          </div>
+        ) : null}
         {orderType === OrderType.TABLE && totals.serviceFeeTmt > 0 ? (
           <div className="flex justify-between text-stone-600">
             <dt>{t("pos.order.service", { pct: servicePct })}</dt>

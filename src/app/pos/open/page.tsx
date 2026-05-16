@@ -59,7 +59,7 @@ export default function PosOpenOrdersPage() {
       <PageHeader
         title={t("pos.open.title")}
         subtitle={t("pos.open.subtitle")}
-        backHref="/pos"
+        showBack={false}
         actions={
           <button
             type="button"
