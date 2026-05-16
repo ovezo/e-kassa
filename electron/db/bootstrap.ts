@@ -29,23 +29,44 @@ function resolveTemplateDbPath(): string | null {
   return fs.existsSync(p) ? p : null;
 }
 
+function moduleSearchPaths(): string[] {
+  const candidates = [
+    path.join(process.resourcesPath, "prisma-cli", "node_modules"),
+    path.join(process.resourcesPath, "app.asar.unpacked", "node_modules"),
+  ];
+  return candidates.filter((p) => fs.existsSync(p));
+}
+
 function resolvePrismaCli(): string {
-  const unpacked = path.join(
-    process.resourcesPath,
-    "app.asar.unpacked",
-    "node_modules",
-    "prisma",
-    "build",
-    "index.js",
+  const candidates = [
+    path.join(
+      process.resourcesPath,
+      "prisma-cli",
+      "node_modules",
+      "prisma",
+      "build",
+      "index.js",
+    ),
+    path.join(
+      process.resourcesPath,
+      "app.asar.unpacked",
+      "node_modules",
+      "prisma",
+      "build",
+      "index.js",
+    ),
+    path.join(app.getAppPath(), "node_modules", "prisma", "build", "index.js"),
+  ];
+
+  for (const cli of candidates) {
+    if (fs.existsSync(cli)) {
+      return cli;
+    }
+  }
+
+  throw new Error(
+    "Prisma CLI missing in application bundle. Reinstall the application.",
   );
-  if (fs.existsSync(unpacked)) {
-    return unpacked;
-  }
-  const inAsar = path.join(app.getAppPath(), "node_modules", "prisma", "build", "index.js");
-  if (fs.existsSync(inAsar)) {
-    return inAsar;
-  }
-  throw new Error("Prisma CLI missing in application bundle");
 }
 
 function runMigrateDeploy(
@@ -54,13 +75,22 @@ function runMigrateDeploy(
   schemaPath: string,
 ): void {
   const prismaCli = resolvePrismaCli();
+  const nodePathParts = [
+    ...moduleSearchPaths(),
+    ...(process.env.NODE_PATH ?? "").split(path.delimiter).filter(Boolean),
+  ];
+  const uniqueNodePath = [...new Set(nodePathParts)];
+
   const env = {
     ...process.env,
     ELECTRON_RUN_AS_NODE: "1",
     DATABASE_URL: databaseUrl(dbFilePath),
+    NODE_PATH: uniqueNodePath.join(path.delimiter),
   };
 
   console.error("[iKassir] Running prisma migrate deploy →", dbFilePath);
+  console.error("[iKassir] Prisma CLI:", prismaCli);
+
   const result = spawnSync(
     process.execPath,
     [prismaCli, "migrate", "deploy", "--schema", schemaPath],
@@ -106,6 +136,6 @@ export function ensureDatabase(dbFilePath: string, appRoot: string): void {
     return;
   }
 
-  // Existing user DB (updates): apply pending migrations.
+  // Existing user DB (updates): apply pending migrations only.
   runMigrateDeploy(dbFilePath, prismaDir, schemaPath);
 }

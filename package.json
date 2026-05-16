@@ -20,7 +20,7 @@
     "dist": "npm run build && electron-builder",
     "dist:dir": "npm run build && electron-builder --dir",
     "db:reset": "node scripts/db-reset.cjs",
-    "prepare:pack": "prisma generate && node scripts/build-db-template.cjs && node scripts/prepare-prisma-ship.cjs",
+    "prepare:pack": "prisma generate && node scripts/build-db-template.cjs && node scripts/prepare-prisma-ship.cjs && node scripts/prepare-prisma-cli.cjs",
     "dist:win": "npm run prepare:pack && npm run build && electron-builder --win nsis --x64",
     "dist:win:dir": "npm run prepare:pack && npm run build && electron-builder --win --dir --x64"
   },
@@ -83,6 +83,10 @@
       {
         "from": "build/prisma-ship",
         "to": "prisma"
+      },
+      {
+        "from": "build/prisma-cli",
+        "to": "prisma-cli"
       },
       {
         "from": "prisma/ikassir-template.db",

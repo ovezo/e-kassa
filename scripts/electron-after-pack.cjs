@@ -40,6 +40,28 @@ exports.default = async function afterPack(context) {
   fs.rmSync(dest, { recursive: true, force: true });
   copyDir(src, dest);
 
+  const unpackedRoot = path.join(
+    context.appOutDir,
+    "resources",
+    "app.asar.unpacked",
+    "node_modules",
+  );
+  const prismaCliSrc = path.join(projectRoot, "node_modules", "prisma");
+  const prismaCliDest = path.join(unpackedRoot, "prisma");
+  if (fs.existsSync(prismaCliSrc)) {
+    console.log("[iKassir] afterPack: copying Prisma CLI to", prismaCliDest);
+    fs.rmSync(prismaCliDest, { recursive: true, force: true });
+    copyDir(prismaCliSrc, prismaCliDest);
+  }
+
+  const prismaScopeSrc = path.join(projectRoot, "node_modules", "@prisma");
+  const prismaScopeDest = path.join(unpackedRoot, "@prisma");
+  if (fs.existsSync(prismaScopeSrc)) {
+    console.log("[iKassir] afterPack: copying @prisma/* to", prismaScopeDest);
+    fs.rmSync(prismaScopeDest, { recursive: true, force: true });
+    copyDir(prismaScopeSrc, prismaScopeDest);
+  }
+
   const clientDir = path.join(dest, "client");
   const defaultJs = path.join(clientDir, "default.js");
   if (!fs.existsSync(defaultJs)) {
@@ -85,6 +107,22 @@ exports.default = async function afterPack(context) {
   if (!fs.existsSync(templateDb)) {
     throw new Error(
       `Template database missing (${templateDb}). Run npm run prepare:pack before dist:win.`,
+    );
+  }
+
+  const bundledPrismaCli = path.join(resources, "prisma-cli", "node_modules", "prisma", "build", "index.js");
+  const unpackedPrismaCli = path.join(
+    context.appOutDir,
+    "resources",
+    "app.asar.unpacked",
+    "node_modules",
+    "prisma",
+    "build",
+    "index.js",
+  );
+  if (!fs.existsSync(bundledPrismaCli) && !fs.existsSync(unpackedPrismaCli)) {
+    throw new Error(
+      `Prisma CLI missing in installer. Run npm run prepare:pack before dist:win.`,
     );
   }
 
