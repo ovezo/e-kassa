@@ -29,39 +29,19 @@ function resolveTemplateDbPath(): string | null {
   return fs.existsSync(p) ? p : null;
 }
 
-function moduleSearchPaths(): string[] {
-  const candidates = [
-    path.join(process.resourcesPath, "prisma-cli", "node_modules"),
-    path.join(process.resourcesPath, "app.asar.unpacked", "node_modules"),
-  ];
-  return candidates.filter((p) => fs.existsSync(p));
+function prismaCliBundleModules(): string | null {
+  const dir = path.join(process.resourcesPath, "prisma-cli", "node_modules");
+  const cli = path.join(dir, "prisma", "build", "index.js");
+  if (fs.existsSync(cli)) {
+    return dir;
+  }
+  return null;
 }
 
 function resolvePrismaCli(): string {
-  const candidates = [
-    path.join(
-      process.resourcesPath,
-      "prisma-cli",
-      "node_modules",
-      "prisma",
-      "build",
-      "index.js",
-    ),
-    path.join(
-      process.resourcesPath,
-      "app.asar.unpacked",
-      "node_modules",
-      "prisma",
-      "build",
-      "index.js",
-    ),
-    path.join(app.getAppPath(), "node_modules", "prisma", "build", "index.js"),
-  ];
-
-  for (const cli of candidates) {
-    if (fs.existsSync(cli)) {
-      return cli;
-    }
+  const bundled = prismaCliBundleModules();
+  if (bundled) {
+    return path.join(bundled, "prisma", "build", "index.js");
   }
 
   throw new Error(
@@ -75,8 +55,12 @@ function runMigrateDeploy(
   schemaPath: string,
 ): void {
   const prismaCli = resolvePrismaCli();
+  const bundleModules = prismaCliBundleModules();
+  if (!bundleModules) {
+    throw new Error("Prisma CLI bundle missing (prisma-cli/node_modules).");
+  }
   const nodePathParts = [
-    ...moduleSearchPaths(),
+    bundleModules,
     ...(process.env.NODE_PATH ?? "").split(path.delimiter).filter(Boolean),
   ];
   const uniqueNodePath = [...new Set(nodePathParts)];

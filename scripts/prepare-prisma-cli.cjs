@@ -1,10 +1,11 @@
 /**
- * Bundle Prisma CLI + @prisma/* for the installed app (migrate deploy on updates).
+ * Bundle Prisma CLI and all runtime dependencies (effect, etc.) for migrate deploy.
  */
 const fs = require("fs");
 const path = require("path");
 
 function copyDir(src, dest) {
+  fs.mkdirSync(path.dirname(dest), { recursive: true });
   if (!fs.existsSync(src)) {
     throw new Error(`Missing path: ${src}`);
   }
@@ -20,21 +21,70 @@ function copyDir(src, dest) {
   }
 }
 
+function packageDir(rootNodeModules, packageName) {
+  if (packageName.startsWith("@")) {
+    const [scope, name] = packageName.split("/");
+    return path.join(rootNodeModules, scope, name);
+  }
+  return path.join(rootNodeModules, packageName);
+}
+
+function collectDependencies(entryPackage, rootNodeModules, collected = new Set()) {
+  if (collected.has(entryPackage)) return;
+  const pkgJson = path.join(packageDir(rootNodeModules, entryPackage), "package.json");
+  if (!fs.existsSync(pkgJson)) {
+    console.warn("[iKassir] prepare-prisma-cli: dependency not installed:", entryPackage);
+    return;
+  }
+  collected.add(entryPackage);
+  const pkg = JSON.parse(fs.readFileSync(pkgJson, "utf8"));
+  const deps = { ...pkg.dependencies, ...pkg.optionalDependencies };
+  for (const name of Object.keys(deps)) {
+    collectDependencies(name, rootNodeModules, collected);
+  }
+}
+
 const root = path.join(__dirname, "..");
-const dest = path.join(root, "build", "prisma-cli", "node_modules");
-const prismaPkg = path.join(root, "node_modules", "prisma");
-const prismaScope = path.join(root, "node_modules", "@prisma");
+const rootNodeModules = path.join(root, "node_modules");
+const bundleRoot = path.join(root, "build", "prisma-cli");
+const destNodeModules = path.join(bundleRoot, "node_modules");
 
-fs.rmSync(path.join(root, "build", "prisma-cli"), { recursive: true, force: true });
-fs.mkdirSync(dest, { recursive: true });
+const packages = new Set();
+collectDependencies("prisma", rootNodeModules, packages);
 
-copyDir(prismaPkg, path.join(dest, "prisma"));
-copyDir(prismaScope, path.join(dest, "@prisma"));
+fs.rmSync(bundleRoot, { recursive: true, force: true });
+fs.mkdirSync(destNodeModules, { recursive: true });
 
-const cli = path.join(dest, "prisma", "build", "index.js");
+for (const name of [...packages].sort()) {
+  const src = packageDir(rootNodeModules, name);
+  const dest = packageDir(destNodeModules, name);
+  copyDir(src, dest);
+}
+
+const cli = path.join(destNodeModules, "prisma", "build", "index.js");
+const effectPkg = path.join(destNodeModules, "effect", "package.json");
 if (!fs.existsSync(cli)) {
-  console.error("Prisma CLI entry missing after copy:", cli);
+  console.error("Prisma CLI entry missing:", cli);
+  process.exit(1);
+}
+if (!fs.existsSync(effectPkg)) {
+  console.error("effect package missing from prisma-cli bundle");
   process.exit(1);
 }
 
-console.log("[iKassir] prisma-cli bundle ready:", path.join(root, "build", "prisma-cli"));
+// Smoke-test resolution like the packaged app (isolated NODE_PATH).
+const Module = require("module");
+process.env.NODE_PATH = destNodeModules;
+Module._initPaths();
+try {
+  require(cli);
+} catch (e) {
+  console.error("[iKassir] prisma-cli bundle failed load test:", e.message);
+  process.exit(1);
+}
+
+console.log(
+  "[iKassir] prisma-cli bundle ready:",
+  bundleRoot,
+  `(${packages.size} packages)`,
+);

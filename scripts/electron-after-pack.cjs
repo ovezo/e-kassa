@@ -40,26 +40,12 @@ exports.default = async function afterPack(context) {
   fs.rmSync(dest, { recursive: true, force: true });
   copyDir(src, dest);
 
-  const unpackedRoot = path.join(
-    context.appOutDir,
-    "resources",
-    "app.asar.unpacked",
-    "node_modules",
-  );
-  const prismaCliSrc = path.join(projectRoot, "node_modules", "prisma");
-  const prismaCliDest = path.join(unpackedRoot, "prisma");
-  if (fs.existsSync(prismaCliSrc)) {
-    console.log("[iKassir] afterPack: copying Prisma CLI to", prismaCliDest);
-    fs.rmSync(prismaCliDest, { recursive: true, force: true });
-    copyDir(prismaCliSrc, prismaCliDest);
-  }
-
-  const prismaScopeSrc = path.join(projectRoot, "node_modules", "@prisma");
-  const prismaScopeDest = path.join(unpackedRoot, "@prisma");
-  if (fs.existsSync(prismaScopeSrc)) {
-    console.log("[iKassir] afterPack: copying @prisma/* to", prismaScopeDest);
-    fs.rmSync(prismaScopeDest, { recursive: true, force: true });
-    copyDir(prismaScopeSrc, prismaScopeDest);
+  const resources = path.join(context.appOutDir, "resources");
+  const stagedPrismaCli = path.join(projectRoot, "build", "prisma-cli", "node_modules");
+  if (fs.existsSync(path.join(stagedPrismaCli, "prisma", "build", "index.js"))) {
+    console.log("[iKassir] afterPack: syncing prisma-cli bundle to", path.join(resources, "prisma-cli"));
+    fs.rmSync(path.join(resources, "prisma-cli"), { recursive: true, force: true });
+    copyDir(path.join(projectRoot, "build", "prisma-cli"), path.join(resources, "prisma-cli"));
   }
 
   const clientDir = path.join(dest, "client");
@@ -95,7 +81,6 @@ exports.default = async function afterPack(context) {
     );
   }
 
-  const resources = path.join(context.appOutDir, "resources");
   const nextServer = path.join(resources, "next-standalone", "server.js");
   if (!fs.existsSync(nextServer)) {
     throw new Error(
@@ -125,18 +110,15 @@ exports.default = async function afterPack(context) {
   }
 
   const bundledPrismaCli = path.join(resources, "prisma-cli", "node_modules", "prisma", "build", "index.js");
-  const unpackedPrismaCli = path.join(
-    context.appOutDir,
-    "resources",
-    "app.asar.unpacked",
-    "node_modules",
-    "prisma",
-    "build",
-    "index.js",
-  );
-  if (!fs.existsSync(bundledPrismaCli) && !fs.existsSync(unpackedPrismaCli)) {
+  const bundledEffect = path.join(resources, "prisma-cli", "node_modules", "effect", "package.json");
+  if (!fs.existsSync(bundledPrismaCli)) {
     throw new Error(
       `Prisma CLI missing in installer. Run npm run prepare:pack before dist:win.`,
+    );
+  }
+  if (!fs.existsSync(bundledEffect)) {
+    throw new Error(
+      `Prisma CLI dependencies incomplete (effect missing). Run npm run prepare:pack before dist:win.`,
     );
   }
 
