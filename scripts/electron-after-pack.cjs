@@ -40,11 +40,36 @@ exports.default = async function afterPack(context) {
   fs.rmSync(dest, { recursive: true, force: true });
   copyDir(src, dest);
 
-  const winEngine = path.join(dest, "client", "query_engine-windows.dll.node");
+  const clientDir = path.join(dest, "client");
+  const defaultJs = path.join(clientDir, "default.js");
+  if (!fs.existsSync(defaultJs)) {
+    throw new Error(
+      `Generated Prisma client incomplete (${defaultJs} missing). Run \`npx prisma generate\` before packaging.`,
+    );
+  }
+
+  const winEngine = path.join(clientDir, "query_engine-windows.dll.node");
   if (context.electronPlatformName === "win32" && !fs.existsSync(winEngine)) {
     throw new Error(
       `Windows Prisma engine missing (${winEngine}). ` +
         'Ensure prisma/schema.prisma has binaryTargets = ["native", "windows"] and run prisma generate.',
+    );
+  }
+
+  const unpackedPrismaClient = path.join(
+    context.appOutDir,
+    "resources",
+    "app.asar.unpacked",
+    "node_modules",
+    "@prisma",
+    "client",
+    "runtime",
+    "library.js",
+  );
+  if (!fs.existsSync(unpackedPrismaClient)) {
+    console.warn(
+      "[iKassir] afterPack: @prisma/client runtime not in app.asar.unpacked — " +
+        "ensure package.json asarUnpack includes node_modules/@prisma/client/**",
     );
   }
 };

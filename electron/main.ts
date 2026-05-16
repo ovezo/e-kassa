@@ -1,3 +1,4 @@
+import "./db/setup-prisma";
 import fs from "fs";
 import net, { type AddressInfo } from "net";
 import http from "http";
@@ -173,9 +174,19 @@ app.whenReady().then(() => {
       return;
     }
   }
-  const prisma = getPrisma(dbPath);
+  let prisma;
+  try {
+    prisma = getPrisma(dbPath);
+  } catch (e) {
+    console.error("[iKassir] Prisma init failed:", e);
+    app.quit();
+    return;
+  }
   registerIpcHandlers(prisma);
-  void createMainWindow();
+  void createMainWindow().catch((e) => {
+    console.error("[iKassir] Failed to open window:", e);
+    app.quit();
+  });
 
   app.on("activate", () => {
     if (BrowserWindow.getAllWindows().length === 0) {

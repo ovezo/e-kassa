@@ -74,7 +74,7 @@
     ],
     "asarUnpack": [
       "node_modules/.prisma/**",
-      "node_modules/@prisma/**",
+      "node_modules/@prisma/client/**",
       "node_modules/prisma/**"
     ],
     "afterPack": "./scripts/electron-after-pack.cjs",
