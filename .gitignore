@@ -21,6 +21,7 @@
 /release
 /build/prisma-ship
 /build/prisma-cli
+/build/next-standalone
 
 # misc
 .DS_Store

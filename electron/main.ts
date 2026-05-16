@@ -19,6 +19,10 @@ function nextStandaloneDir(): string {
   if (app.isPackaged) {
     return path.join(process.resourcesPath, "next-standalone");
   }
+  const staged = path.join(process.cwd(), "build", "next-standalone");
+  if (fs.existsSync(path.join(staged, "server.js"))) {
+    return staged;
+  }
   return path.join(process.cwd(), ".next", "standalone");
 }
 
@@ -158,11 +162,20 @@ async function ensureRendererBaseUrl(): Promise<string> {
     );
   }
 
+  const nextPkg = path.join(serverDir, "node_modules", "next", "package.json");
+  if (!fs.existsSync(nextPkg)) {
+    throw new Error(
+      `Next runtime missing in the installer (${nextPkg}). Rebuild with: npm run dist:win`,
+    );
+  }
+
   const imagesRoot =
     process.env.IKASSIR_PRODUCT_IMAGES_ROOT?.trim() ||
     path.join(app.getPath("userData"), "product-images");
 
   appendLog("Starting Next standalone", { serverJs, port, serverDir });
+
+  const standaloneModules = path.join(serverDir, "node_modules");
 
   nextChild = spawn(process.execPath, [serverJs], {
     cwd: serverDir,
@@ -172,6 +185,7 @@ async function ensureRendererBaseUrl(): Promise<string> {
       PORT: String(port),
       HOSTNAME: "127.0.0.1",
       NODE_ENV: "production",
+      NODE_PATH: standaloneModules,
       IKASSIR_PRODUCT_IMAGES_ROOT: imagesRoot,
     },
     stdio: ["ignore", "pipe", "pipe"],

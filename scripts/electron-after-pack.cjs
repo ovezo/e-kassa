@@ -103,6 +103,20 @@ exports.default = async function afterPack(context) {
     );
   }
 
+  const nextModule = path.join(resources, "next-standalone", "node_modules", "next", "package.json");
+  if (!fs.existsSync(nextModule)) {
+    const staged = path.join(projectRoot, "build", "next-standalone");
+    if (!fs.existsSync(path.join(staged, "node_modules", "next", "package.json"))) {
+      throw new Error(
+        `Next standalone is missing node_modules/next in the installer. ` +
+          `Run npm run build (prepare-next-standalone) before dist:win.`,
+      );
+    }
+    console.log("[iKassir] afterPack: repairing next-standalone (node_modules was omitted)");
+    fs.rmSync(path.join(resources, "next-standalone"), { recursive: true, force: true });
+    copyDir(staged, path.join(resources, "next-standalone"));
+  }
+
   const templateDb = path.join(resources, "ikassir-template.db");
   if (!fs.existsSync(templateDb)) {
     throw new Error(

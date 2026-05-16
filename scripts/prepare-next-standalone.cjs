@@ -1,5 +1,8 @@
 /**
- * After `next build` with `output: "standalone"`, copy assets the standalone server needs.
+ * After `next build` with `output: "standalone"`, copy the full standalone tree
+ * (including node_modules) into build/next-standalone for electron-builder.
+ * electron-builder often skips node_modules in extraResources unless we ship a
+ * pre-staged folder explicitly.
  */
 const fs = require("fs");
 const path = require("path");
@@ -21,17 +24,27 @@ function copyDir(src, dest) {
 }
 
 const root = path.join(__dirname, "..");
-const standalone = path.join(root, ".next", "standalone");
-const serverJs = path.join(standalone, "server.js");
+const standaloneSrc = path.join(root, ".next", "standalone");
+const standaloneDest = path.join(root, "build", "next-standalone");
+const serverJs = path.join(standaloneSrc, "server.js");
 
 if (!fs.existsSync(serverJs)) {
   console.error(
-    "[iKassir] .next/standalone/server.js not found. Ensure next.config has output: \"standalone\" and run next build.",
+    '[iKassir] .next/standalone/server.js not found. Run "next build" with output: "standalone".',
   );
   process.exit(1);
 }
 
-copyDir(path.join(root, "public"), path.join(standalone, "public"));
-copyDir(path.join(root, ".next", "static"), path.join(standalone, ".next", "static"));
+fs.rmSync(standaloneDest, { recursive: true, force: true });
+copyDir(standaloneSrc, standaloneDest);
 
-console.log("[iKassir] Prepared Next standalone at", standalone);
+copyDir(path.join(root, "public"), path.join(standaloneDest, "public"));
+copyDir(path.join(root, ".next", "static"), path.join(standaloneDest, ".next", "static"));
+
+const nextPkg = path.join(standaloneDest, "node_modules", "next", "package.json");
+if (!fs.existsSync(nextPkg)) {
+  console.error("[iKassir] Standalone bundle missing node_modules/next — build is incomplete.");
+  process.exit(1);
+}
+
+console.log("[iKassir] Next standalone staged at", standaloneDest);
