@@ -14,13 +14,44 @@ function appRoot(): string {
   return app.isPackaged ? app.getAppPath() : process.cwd();
 }
 
+function nextStandaloneDir(): string {
+  if (app.isPackaged) {
+    return path.join(process.resourcesPath, "next-standalone");
+  }
+  return path.join(process.cwd(), ".next", "standalone");
+}
+
 /** `next dev` — Next is already running on 3000 (see npm script: both must use NODE_ENV=development). */
 const isNextDevSession = process.env.NODE_ENV === "development";
 
-console.error("[iKassir] Electron main loaded. NODE_ENV=%s → %s", process.env.NODE_ENV ?? "(unset)", isNextDevSession ? "load http://127.0.0.1:3000 (next dev)" : "spawn next start (production)");
+console.error("[iKassir] Electron main loaded. NODE_ENV=%s → %s", process.env.NODE_ENV ?? "(unset)", isNextDevSession ? "load http://127.0.0.1:3000 (next dev)" : "spawn Next standalone server (production)");
 
 let nextChild: ChildProcess | null = null;
 let nextProdBaseUrl: string | null = null;
+let mainWindow: BrowserWindow | null = null;
+
+const gotSingleInstanceLock = app.requestSingleInstanceLock();
+if (!gotSingleInstanceLock) {
+  app.quit();
+  process.exit(0);
+}
+
+function killNextChild(): void {
+  const child = nextChild;
+  if (!child || child.killed) {
+    nextChild = null;
+    nextProdBaseUrl = null;
+    return;
+  }
+  const pid = child.pid;
+  if (process.platform === "win32" && pid) {
+    spawn("taskkill", ["/pid", String(pid), "/f", "/t"], { stdio: "ignore", windowsHide: true });
+  } else {
+    child.kill("SIGTERM");
+  }
+  nextChild = null;
+  nextProdBaseUrl = null;
+}
 
 function resolveDbPath(): string {
   if (app.isPackaged) {
@@ -73,6 +104,16 @@ function waitForHttpOk(url: string, timeoutMs: number): Promise<void> {
   });
 }
 
+function pipeNextLogs(child: ChildProcess): void {
+  const tag = (chunk: Buffer) => {
+    for (const line of chunk.toString().split(/\r?\n/)) {
+      if (line.trim()) console.error("[iKassir][next]", line);
+    }
+  };
+  child.stdout?.on("data", tag);
+  child.stderr?.on("data", tag);
+}
+
 async function ensureRendererBaseUrl(): Promise<string> {
   if (isNextDevSession) {
     return "http://127.0.0.1:3000";
@@ -83,25 +124,45 @@ async function ensureRendererBaseUrl(): Promise<string> {
   }
 
   const port = await getFreePort();
-  const root = appRoot();
-  const nextCli = path.join(root, "node_modules", "next", "dist", "bin", "next");
+  const serverDir = nextStandaloneDir();
+  const serverJs = path.join(serverDir, "server.js");
 
-  const imagesRoot = process.env.IKASSIR_PRODUCT_IMAGES_ROOT?.trim() || path.join(root, "product-images");
+  if (!fs.existsSync(serverJs)) {
+    throw new Error(
+      `Next standalone server missing at ${serverJs}. Rebuild with npm run dist:win.`,
+    );
+  }
 
-  nextChild = spawn(process.execPath, [nextCli, "start", "-p", String(port), "-H", "127.0.0.1"], {
-    cwd: root,
+  const imagesRoot =
+    process.env.IKASSIR_PRODUCT_IMAGES_ROOT?.trim() ||
+    path.join(app.getPath("userData"), "product-images");
+
+  console.error("[iKassir] Starting Next standalone: %s (port %s)", serverJs, port);
+
+  nextChild = spawn(process.execPath, [serverJs], {
+    cwd: serverDir,
     env: {
       ...process.env,
       ELECTRON_RUN_AS_NODE: "1",
       PORT: String(port),
+      HOSTNAME: "127.0.0.1",
       NODE_ENV: "production",
       IKASSIR_PRODUCT_IMAGES_ROOT: imagesRoot,
     },
-    stdio: "pipe",
+    stdio: ["ignore", "pipe", "pipe"],
+    windowsHide: true,
   });
 
+  pipeNextLogs(nextChild);
+
   nextChild.on("error", (err) => {
-    console.error("next start failed to spawn:", err);
+    console.error("[iKassir] Next server failed to spawn:", err);
+  });
+
+  nextChild.on("exit", (code, signal) => {
+    console.error("[iKassir] Next server exited (code=%s signal=%s)", code, signal);
+    nextChild = null;
+    nextProdBaseUrl = null;
   });
 
   const base = `http://127.0.0.1:${port}`;
@@ -117,6 +178,7 @@ async function createMainWindow(): Promise<void> {
     minWidth: 900,
     minHeight: 600,
     title: "iKassir",
+    show: false,
     webPreferences: {
       preload: path.join(__dirname, "preload.js"),
       contextIsolation: true,
@@ -124,8 +186,18 @@ async function createMainWindow(): Promise<void> {
       sandbox: true,
     },
   });
+  mainWindow = win;
+
+  win.on("closed", () => {
+    if (mainWindow === win) mainWindow = null;
+  });
+
+  win.webContents.on("did-fail-load", (_ev, code, desc, url) => {
+    console.error("[iKassir] did-fail-load code=%s desc=%s url=%s", code, desc, url);
+  });
 
   win.once("ready-to-show", () => {
+    win.show();
     win.focus();
     if (process.platform === "darwin") {
       app.focus({ steal: true });
@@ -141,6 +213,22 @@ async function createMainWindow(): Promise<void> {
     win.webContents.openDevTools({ mode: "detach" });
   }
 }
+
+function focusOrCreateMainWindow(): void {
+  if (mainWindow && !mainWindow.isDestroyed()) {
+    if (mainWindow.isMinimized()) mainWindow.restore();
+    mainWindow.focus();
+    return;
+  }
+  void createMainWindow().catch((e) => {
+    console.error("[iKassir] Failed to open window:", e);
+    app.quit();
+  });
+}
+
+app.on("second-instance", () => {
+  focusOrCreateMainWindow();
+});
 
 app.whenReady().then(() => {
   const dbPath = resolveDbPath();
@@ -183,29 +271,23 @@ app.whenReady().then(() => {
     return;
   }
   registerIpcHandlers(prisma);
-  void createMainWindow().catch((e) => {
-    console.error("[iKassir] Failed to open window:", e);
-    app.quit();
-  });
+  focusOrCreateMainWindow();
 
   app.on("activate", () => {
     if (BrowserWindow.getAllWindows().length === 0) {
-      void createMainWindow();
+      focusOrCreateMainWindow();
     }
   });
 });
 
 app.on("window-all-closed", () => {
   if (process.platform !== "darwin") {
+    killNextChild();
     void disconnectPrisma().finally(() => app.quit());
   }
 });
 
 app.on("before-quit", () => {
-  if (nextChild && !nextChild.killed) {
-    nextChild.kill("SIGTERM");
-    nextChild = null;
-    nextProdBaseUrl = null;
-  }
+  killNextChild();
   void disconnectPrisma();
 });

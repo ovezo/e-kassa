@@ -97,6 +97,10 @@ The installed app stores its SQLite database under the user profile (e.g. `%APPD
 
 If you see **Cannot find module '.prisma/client/default'** after an older build, reinstall from a fresh `npm run dist:win` build (the installer bundles the Prisma client explicitly).
 
+### Blank window or app won’t open again (Windows)
+
+The UI is served by a small **Next.js server** bundled next to the app (not inside `app.asar`). If an old build left **iKassir** or **Electron** running in Task Manager, quit them (or end task), then start again. New builds use a real folder for that server and stop it when you close the window.
+
 ### `no such table: Product` (SQLite)
 
 Usually an **old database file** is still present from a previous schema, or `npm run db:migrate` was run on `prisma/dev.db` while the **installed app** uses `%APPDATA%\iKassir\ikassir.db`.

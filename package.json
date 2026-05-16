@@ -10,7 +10,7 @@
     "dev:electron": "npm run build:electron && cross-env NODE_ENV=development electron .",
     "dev:web": "next dev",
     "build:electron": "tsc -p electron/tsconfig.json",
-    "build:next": "next build",
+    "build:next": "next build && node scripts/prepare-next-standalone.cjs",
     "build": "npm run build:next && npm run build:electron",
     "start": "next start",
     "lint": "next lint",
@@ -62,10 +62,7 @@
     },
     "files": [
       "dist-electron/**/*",
-      ".next/**/*",
-      "public/**/*",
       "package.json",
-      "next.config.ts",
       "node_modules/**/*",
       "node_modules/.prisma/**/*",
       "prisma/**/*",
@@ -79,6 +76,11 @@
     ],
     "afterPack": "./scripts/electron-after-pack.cjs",
     "extraResources": [
+      {
+        "from": ".next/standalone",
+        "to": "next-standalone",
+        "filter": ["**/*"]
+      },
       {
         "from": "prisma",
         "to": "prisma",
