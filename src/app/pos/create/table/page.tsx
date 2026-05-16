@@ -5,6 +5,8 @@ import { PageHeader } from "@/components/PageHeader";
 import { useCallback, useEffect, useState } from "react";
 import { OrderType } from "@prisma/client";
 import { ikassirInvoke } from "@/lib/electron-api";
+import { startNewOrder } from "@/lib/pos/start-new-order";
+import { readSession } from "@/lib/session";
 import { useTranslations } from "@/lib/i18n/LocaleProvider";
 
 const cardClass =
@@ -23,6 +25,7 @@ export default function PosCreateTablePage() {
   const t = useTranslations();
   const [tables, setTables] = useState<TableRow[]>([]);
   const [error, setError] = useState<string | null>(null);
+  const [busyTableId, setBusyTableId] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     try {
@@ -37,8 +40,30 @@ export default function PosCreateTablePage() {
     void load();
   }, [load]);
 
-  function goToOrder(tableId: string) {
-    router.push(`/pos/order?type=${OrderType.TABLE}&tableId=${encodeURIComponent(tableId)}`);
+  async function goToOrder(tableId: string) {
+    const session = readSession();
+    if (!session) {
+      router.replace("/login");
+      return;
+    }
+    setBusyTableId(tableId);
+    setError(null);
+    try {
+      const res = await startNewOrder({
+        type: OrderType.TABLE,
+        tableId,
+        actorUserId: session.id,
+      });
+      if (!res.ok) {
+        setError(res.error);
+        return;
+      }
+      router.push(`/pos/order?id=${encodeURIComponent(res.orderId)}`);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Failed");
+    } finally {
+      setBusyTableId(null);
+    }
   }
 
   return (
@@ -57,7 +82,8 @@ export default function PosCreateTablePage() {
             key={tbl.id}
             type="button"
             className={cardClass}
-            onClick={() => goToOrder(tbl.id)}
+            disabled={busyTableId !== null}
+            onClick={() => void goToOrder(tbl.id)}
           >
             <span className="text-xl font-semibold text-stone-900">{tbl.label}</span>
             {tbl._count.orders > 0 ? (

@@ -13,6 +13,6 @@
     "declaration": false,
     "sourceMap": true
   },
-  "include": ["./**/*.ts", "./**/*.d.ts", "../src/lib/server/ipc/**/*.ts"],
+  "include": ["./**/*.ts", "./**/*.d.ts", "../src/lib/server/ipc/**/*.ts", "../src/lib/pos/receipt-html.ts", "../src/lib/pos/receipt-print.ts", "../src/lib/format-money.ts"],
   "exclude": ["node_modules"]
 }

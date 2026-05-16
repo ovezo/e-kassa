@@ -10,6 +10,8 @@ type PageHeaderProps = {
   title: ReactNode;
   subtitle?: ReactNode;
   backHref?: string;
+  /** When set, runs instead of `backHref` / `router.back()` (may be async). */
+  onBack?: () => void | Promise<void>;
   showBack?: boolean;
   titleClassName?: string;
   subtitleClassName?: string;
@@ -21,6 +23,7 @@ export function PageHeader({
   title,
   subtitle,
   backHref,
+  onBack,
   showBack,
   titleClassName = "text-2xl font-semibold text-stone-800",
   subtitleClassName = "text-base text-stone-600",
@@ -36,6 +39,10 @@ export function PageHeader({
   const shouldShowBack = showBack ?? !ROOT_PATHS.has(normalizedPathname);
 
   function goBack() {
+    if (onBack) {
+      void Promise.resolve(onBack());
+      return;
+    }
     if (backHref) router.push(backHref);
     else router.back();
   }

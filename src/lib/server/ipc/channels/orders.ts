@@ -98,6 +98,11 @@ const deleteOrderSchema = z.object({
   actorUserId: z.string(),
 });
 
+const discardIfEmptySchema = z.object({
+  orderId: z.string(),
+  actorUserId: z.string().optional(),
+});
+
 const orderInclude = {
   table: { select: { id: true, label: true } },
   lines: { orderBy: { createdAt: "asc" as const } },
@@ -231,7 +236,7 @@ export async function handleOrdersChannel(
         include: {
           table: { select: { id: true, label: true } },
           openedBy: { select: { id: true, displayName: true } },
-          _count: { select: { lines: true } },
+          lines: { select: { productName: true, qty: true }, orderBy: { createdAt: "asc" } },
         },
       });
       return orders;
@@ -245,7 +250,7 @@ export async function handleOrdersChannel(
         include: {
           table: { select: { id: true, label: true } },
           openedBy: { select: { id: true, displayName: true } },
-          _count: { select: { lines: true } },
+          lines: { select: { productName: true, qty: true }, orderBy: { createdAt: "asc" } },
         },
       });
       return orders;
@@ -417,19 +422,6 @@ export async function handleOrdersChannel(
       if (!line) return { ok: false as const, error: "Line not found" };
 
       await prisma.orderLine.delete({ where: { id: lineId } });
-
-      const remaining = await prisma.orderLine.count({ where: { orderId } });
-      if (remaining === 0) {
-        await prisma.order.delete({ where: { id: orderId } });
-        await audit(prisma, {
-          userId: actorUserId,
-          action: "orders.delete_empty",
-          entity: "Order",
-          payload: { orderId },
-        });
-        return { ok: true as const, abandoned: true as const };
-      }
-
       await recalcOrderTotals(prisma, orderId);
       await audit(prisma, {
         userId: actorUserId,
@@ -476,6 +468,32 @@ export async function handleOrdersChannel(
         payload: { orderId, totalTmt: closed.totalTmt },
       });
       return { ok: true as const, order: closed };
+    }
+
+    case "orders.discardIfEmpty": {
+      const parsed = discardIfEmptySchema.safeParse(payload);
+      if (!parsed.success) return { ok: false as const, error: "Invalid input" };
+      const { orderId, actorUserId } = parsed.data;
+
+      const order = await prisma.order.findUnique({
+        where: { id: orderId },
+        include: { lines: { select: { id: true } } },
+      });
+      if (!order || order.status !== OrderStatus.OPEN) {
+        return { ok: true as const, discarded: false as const };
+      }
+      if (order.lines.length > 0) {
+        return { ok: true as const, discarded: false as const };
+      }
+
+      await prisma.order.delete({ where: { id: orderId } });
+      await audit(prisma, {
+        userId: actorUserId,
+        action: "orders.discard_empty",
+        entity: "Order",
+        payload: { orderId },
+      });
+      return { ok: true as const, discarded: true as const };
     }
 
     case "orders.delete": {

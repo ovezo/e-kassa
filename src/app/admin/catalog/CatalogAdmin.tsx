@@ -1,5 +1,6 @@
 "use client";
 
+import { ProductImageFileInput } from "@/components/admin/ProductImageFileInput";
 import { PageHeader } from "@/components/PageHeader";
 import {
   DndContext,
@@ -155,6 +156,7 @@ type ProductEditForm = {
   imageUrl: string | null;
   pendingImageBase64: string | null;
   pendingImageMime: "image/jpeg" | "image/png" | "image/webp" | "image/gif" | null;
+  pendingFileName: string | null;
   clearImage: boolean;
 };
 type TableEditForm = { id: string; label: string; active: boolean };
@@ -312,14 +314,10 @@ function ProductBlock({
                           {editProduct.clearImage ? (
                             <span className="text-sm text-stone-500">Photo will be removed when you save.</span>
                           ) : null}
-                          <input
-                            type="file"
-                            accept="image/jpeg,image/png,image/webp,image/gif"
-                            className="max-w-full text-sm text-stone-700"
-                            onChange={(e) => {
-                              const f = e.target.files?.[0];
-                              e.target.value = "";
-                              if (!f) return;
+                          <ProductImageFileInput
+                            disabled={busy}
+                            selectedFileName={editProduct.pendingFileName}
+                            onSelect={(f) => {
                               void readImageFileForUpload(f).then((r) => {
                                 if (!r.ok) {
                                   onImageError(r.error);
@@ -328,6 +326,7 @@ function ProductBlock({
                                 onEditChange({
                                   pendingImageBase64: r.imageBase64,
                                   pendingImageMime: r.imageMimeType,
+                                  pendingFileName: f.name,
                                   clearImage: false,
                                 });
                               });
@@ -344,6 +343,7 @@ function ProductBlock({
                                   clearImage: true,
                                   pendingImageBase64: null,
                                   pendingImageMime: null,
+                                  pendingFileName: null,
                                 })
                               }
                             >
@@ -423,6 +423,7 @@ export function CatalogAdmin() {
   const [createProductImage, setCreateProductImage] = useState<{
     imageBase64: string;
     imageMimeType: "image/jpeg" | "image/png" | "image/webp" | "image/gif";
+    fileName: string;
   } | null>(null);
 
   const [tables, setTables] = useState<TableRow[]>([]);
@@ -955,19 +956,21 @@ export function CatalogAdmin() {
               </button>
             </div>
             <div className="sm:col-span-2 lg:col-span-4">
-              <label className="text-sm font-medium text-stone-600">Photo (optional)</label>
+              <label className="text-sm font-medium text-stone-600">
+                Photo (optional) 
+                {
+                  createProductImage 
+                  ? (
+                    <span className="ml-2 text-sm text-amber-900">Image selected — will upload when you add the product.</span>
+                  )
+                  : null
+                }
+              </label>
               <div className="mt-1 flex flex-wrap items-center gap-3">
-                {createProductImage ? (
-                  <span className="text-sm text-amber-900">Image selected — will upload when you add the product.</span>
-                ) : null}
-                <input
-                  type="file"
-                  accept="image/jpeg,image/png,image/webp,image/gif"
-                  className="max-w-full text-sm text-stone-700"
-                  onChange={(e) => {
-                    const f = e.target.files?.[0];
-                    e.target.value = "";
-                    if (!f) return;
+                <ProductImageFileInput
+                  disabled={busy}
+                  selectedFileName={createProductImage?.fileName ?? null}
+                  onSelect={(f) => {
                     void readImageFileForUpload(f).then((r) => {
                       if (!r.ok) {
                         setError(r.error);
@@ -976,6 +979,7 @@ export function CatalogAdmin() {
                       setCreateProductImage({
                         imageBase64: r.imageBase64,
                         imageMimeType: r.imageMimeType,
+                        fileName: f.name,
                       });
                     });
                   }}
@@ -1022,6 +1026,7 @@ export function CatalogAdmin() {
                       imageUrl: p.imageUrl ?? null,
                       pendingImageBase64: null,
                       pendingImageMime: null,
+                      pendingFileName: null,
                       clearImage: false,
                     })
                   }

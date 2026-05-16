@@ -3,6 +3,7 @@
 import { OrderStatus, OrderType } from "@prisma/client";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
+import { EditableOrderReceiptView } from "@/components/EditableOrderReceiptView";
 import { OrderReceiptView } from "@/components/OrderReceiptView";
 import { PageHeader } from "@/components/PageHeader";
 import { ReceiptModal } from "@/components/ReceiptModal";
@@ -10,19 +11,14 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ikassirInvoke } from "@/lib/electron-api";
 import { formatTmt } from "@/lib/format-money";
 import {
-  baselinePrintedQty,
   calcReceiptTotals,
-  commitPrintedAfterPrint,
-  hasAnyNewItems,
-  lineHasPrintedQty,
-  lineNewQty,
   receiptLinesForFull,
-  receiptLinesForNewItems,
-  syncPrintedQty,
   type ReceiptLine,
   type ReceiptTotals,
 } from "@/lib/pos/receipt-print";
-import { readSession, type SessionUser } from "@/lib/session";
+import type { ReceiptPrintPayload } from "@/lib/pos/receipt-html";
+import { discardEmptyOrderIfNeeded } from "@/lib/pos/discard-empty-order";
+import { readSession } from "@/lib/session";
 import { productImageDisplayUrl } from "@/lib/product-image-url";
 import { useTranslations } from "@/lib/i18n/LocaleProvider";
 
@@ -70,8 +66,6 @@ type ProductRow = {
   sortOrder: number;
   imageUrl: string | null;
 };
-
-type TableListRow = { id: string; label: string; active: boolean };
 
 const MENU_CATEGORY_VIEW_KEY = "ikassir_menu_category_view";
 
@@ -134,81 +128,6 @@ function ProductTile({
   );
 }
 
-function roundMoney(n: number): number {
-  return Math.round(n * 100) / 100;
-}
-
-const NEW_ORDER_BASELINE_SKIP_KEY = "ikassir_new_order_baseline_skip";
-
-/** Survives remount when URL changes from draft → persisted order id. */
-function markSkipBaselineForNewOrder(orderId: string): void {
-  try {
-    sessionStorage.setItem(NEW_ORDER_BASELINE_SKIP_KEY, orderId);
-  } catch {
-    /* ignore */
-  }
-}
-
-function consumeSkipBaselineForNewOrder(orderId: string): boolean {
-  try {
-    const stored = sessionStorage.getItem(NEW_ORDER_BASELINE_SKIP_KEY);
-    if (stored === orderId) {
-      sessionStorage.removeItem(NEW_ORDER_BASELINE_SKIP_KEY);
-      return true;
-    }
-  } catch {
-    /* ignore */
-  }
-  return false;
-}
-
-/** URL-driven new order before first menu item (no DB row yet). */
-function parseNewOrderDraft(search: URLSearchParams): { type: OrderType; tableId: string | null } | null {
-  const typeRaw = search.get("type");
-  if (!typeRaw) return null;
-  const tableParam = search.get("tableId");
-  const tableId = tableParam?.trim() || null;
-
-  if (typeRaw === OrderType.TABLE) {
-    if (!tableId) return null;
-    return { type: OrderType.TABLE, tableId };
-  }
-  if (typeRaw === OrderType.TAKEAWAY_PICKUP || typeRaw === OrderType.TAKEAWAY_DELIVERY) {
-    if (tableId) return null;
-    return { type: typeRaw, tableId: null };
-  }
-  return null;
-}
-
-
-function buildPreviewOrder(
-  draft: { type: OrderType; tableId: string | null },
-  tableLabel: string | null,
-  session: SessionUser,
-  settings: Record<string, string> | null,
-): OrderDetail {
-  const dRaw = Number.parseFloat(settings?.delivery_fee_tmt ?? "3");
-  const deliveryFeeTmt =
-    draft.type === OrderType.TAKEAWAY_DELIVERY
-      ? roundMoney(Number.isFinite(dRaw) ? dRaw : 3)
-      : 0;
-  return {
-    id: "",
-    type: draft.type,
-    status: OrderStatus.OPEN,
-    openedAt: new Date().toISOString(),
-    closedAt: null,
-    tableId: draft.tableId,
-    table: draft.tableId && tableLabel ? { id: draft.tableId, label: tableLabel } : null,
-    lines: [],
-    subtotalTmt: 0,
-    serviceFeeTmt: 0,
-    deliveryFeeTmt,
-    totalTmt: deliveryFeeTmt,
-    openedBy: { id: session.id, displayName: session.displayName },
-  };
-}
-
 export function OrderWorkspace() {
   const router = useRouter();
   const search = useSearchParams();
@@ -232,11 +151,7 @@ export function OrderWorkspace() {
     [t],
   );
 
-  const draftSig = search.toString();
-  const draft = useMemo(() => parseNewOrderDraft(new URLSearchParams(draftSig)), [draftSig]);
-
   const [order, setOrder] = useState<OrderDetail | null>(null);
-  const [draftTableLabel, setDraftTableLabel] = useState<string | null>(null);
   const [categories, setCategories] = useState<CategoryRow[]>([]);
   const [products, setProducts] = useState<ProductRow[]>([]);
   const [settings, setSettings] = useState<Record<string, string> | null>(null);
@@ -244,20 +159,20 @@ export function OrderWorkspace() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [venueName, setVenueName] = useState("Coffee Shop");
-  /** Per line id: qty already sent to kitchen / printed on a receipt this visit. */
-  const [printedQty, setPrintedQty] = useState<Record<string, number>>({});
   const [printJob, setPrintJob] = useState<{
-    mode: "full" | "new";
-    lines: ReceiptLine[];
-    totals: ReceiptTotals;
-    commitCheckpoint: boolean;
+    allLines: ReceiptLine[];
+    omittedLineIds: string[];
+    editable: boolean;
+    /** Frozen totals for read-only (closed) receipt preview. */
+    totals?: ReceiptTotals;
   } | null>(null);
-  const printLinesRef = useRef<OrderLine[]>([]);
-  /** Order ids already baselined this visit (reopened open order). */
-  const visitBaselinedOrderId = useRef<string | null>(null);
-  /** Skip baseline right after creating a new order in this session. */
-  const skipBaselineOrderId = useRef<string | null>(null);
+  const [printBusy, setPrintBusy] = useState(false);
   const prevEffectiveOrderIdRef = useRef<string | null | undefined>(undefined);
+  const orderRef = useRef(order);
+  orderRef.current = order;
+  const orderIdRef = useRef(orderId);
+  orderIdRef.current = orderId;
+  const workspaceMountedRef = useRef(false);
 
   const storeProducts = useMemo(() => products.filter((p) => p.active), [products]);
 
@@ -338,11 +253,9 @@ export function OrderWorkspace() {
   }, []);
 
   useEffect(() => {
-    const d = parseNewOrderDraft(new URLSearchParams(draftSig));
-    if (!orderId && !d) {
+    if (!orderId) {
       setLoading(false);
       setOrder(null);
-      setDraftTableLabel(null);
       return;
     }
 
@@ -350,39 +263,45 @@ export function OrderWorkspace() {
     setError(null);
     void (async () => {
       try {
-        if (orderId) {
-          await Promise.all([loadOrder(), loadCatalog()]);
-        } else if (d) {
-          setOrder(null);
-          await loadCatalog();
-          if (d.type === OrderType.TABLE && d.tableId) {
-            const list = await ikassirInvoke<TableListRow[]>("tables.list");
-            const tblRow = list.find((x) => x.id === d.tableId);
-            if (!tblRow?.active) {
-              setDraftTableLabel(null);
-              setError(t("pos.order.tableInvalid"));
-            } else {
-              setDraftTableLabel(tblRow.label);
-            }
-          } else {
-            setDraftTableLabel(null);
-          }
-        }
+        await Promise.all([loadOrder(), loadCatalog()]);
       } catch (e) {
         setError(e instanceof Error ? e.message : "Failed to load");
       } finally {
         setLoading(false);
       }
     })();
-  }, [orderId, draftSig, loadOrder, loadCatalog, t]);
+  }, [orderId, loadOrder, loadCatalog]);
 
-  const effectiveOrderId = order?.id ?? orderId;
+  const handleLeaveToOpen = useCallback(async () => {
+    if (!orderId) {
+      router.push("/pos/open");
+      return;
+    }
+    await discardEmptyOrderIfNeeded(orderId, orderRef.current);
+    router.push("/pos/open");
+  }, [orderId, router]);
 
-  const viewOrder = useMemo((): OrderDetail | null => {
-    if (order) return order;
-    if (draft && session && !orderId) return buildPreviewOrder(draft, draftTableLabel, session, settings);
-    return null;
-  }, [order, draft, session, orderId, draftTableLabel, settings]);
+  useEffect(() => {
+    const leavingOnCleanup = orderId;
+    if (!leavingOnCleanup) return;
+
+    workspaceMountedRef.current = true;
+
+    return () => {
+      workspaceMountedRef.current = false;
+
+      queueMicrotask(() => {
+        if (workspaceMountedRef.current && orderIdRef.current === leavingOnCleanup) {
+          return;
+        }
+        void discardEmptyOrderIfNeeded(leavingOnCleanup, orderRef.current);
+      });
+    };
+  }, [orderId]);
+
+  const effectiveOrderId = orderId;
+
+  const viewOrder = order;
 
   useEffect(() => {
     const current = effectiveOrderId ?? null;
@@ -393,9 +312,6 @@ export function OrderWorkspace() {
         prev !== null && current !== null && prev !== current;
       const leftOrder = prev !== null && current === null;
       if (switchedOrder || leftOrder) {
-        visitBaselinedOrderId.current = null;
-        skipBaselineOrderId.current = null;
-        setPrintedQty({});
         setPrintJob(null);
       }
     }
@@ -403,67 +319,36 @@ export function OrderWorkspace() {
     prevEffectiveOrderIdRef.current = current;
   }, [effectiveOrderId]);
 
-  useEffect(() => {
-    if (!order?.id || !viewOrder) return;
-
-    if (order.status === OrderStatus.OPEN && visitBaselinedOrderId.current !== order.id) {
-      visitBaselinedOrderId.current = order.id;
-      const skipAsNewOrder =
-        skipBaselineOrderId.current === order.id ||
-        consumeSkipBaselineForNewOrder(order.id);
-      if (skipAsNewOrder) {
-        skipBaselineOrderId.current = null;
-        setPrintedQty({});
-        return;
-      }
-      setPrintedQty(baselinePrintedQty(viewOrder.lines));
-      return;
-    }
-
-    setPrintedQty((prev) => syncPrintedQty(prev, viewOrder.lines));
-  }, [order?.id, order?.status, viewOrder?.lines]);
-
-  const canAddFromMenu =
-    !!session &&
-    (Boolean(draft && !orderId && !error) || Boolean(order && order.status === OrderStatus.OPEN));
+  const canAddFromMenu = !!session && order?.status === OrderStatus.OPEN;
 
   const orderIsOpen = order?.status === OrderStatus.OPEN;
 
+  const receiptVisibleLines = useMemo(() => {
+    if (!printJob) return [];
+    return printJob.allLines.filter((l) => !printJob.omittedLineIds.includes(l.id));
+  }, [printJob]);
+
+  const receiptDisplayTotals = useMemo((): ReceiptTotals | null => {
+    if (!printJob || !viewOrder) return null;
+    if (!printJob.editable && printJob.totals) return printJob.totals;
+    const pct = Number.parseFloat(settings?.service_fee_percent ?? "10");
+    const deliveryRaw = Number.parseFloat(settings?.delivery_fee_tmt ?? "3");
+    return calcReceiptTotals(viewOrder.type, receiptVisibleLines, {
+      serviceFeePercent: Number.isFinite(pct) ? pct : 10,
+      fullDeliveryFeeTmt:
+        viewOrder.deliveryFeeTmt || (Number.isFinite(deliveryRaw) ? deliveryRaw : 3),
+      includeDelivery: true,
+    });
+  }, [printJob, viewOrder, receiptVisibleLines, settings]);
+
   async function addProduct(productId: string) {
-    if (!session || !canAddFromMenu) return;
+    if (!session || !canAddFromMenu || !orderId) return;
     setBusy(true);
     setError(null);
     try {
-      if (draft && !orderId && !order) {
-        const res = await ikassirInvoke<{
-          ok: boolean;
-          order?: OrderDetail;
-          error?: string;
-        }>("orders.createWithLine", {
-          type: draft.type,
-          tableId: draft.tableId,
-          productId,
-          qty: 1,
-          actorUserId: session.id,
-        });
-        if (!res.ok || !res.order) {
-          setError(res.error ?? "Could not add item");
-          return;
-        }
-        skipBaselineOrderId.current = res.order.id;
-        visitBaselinedOrderId.current = res.order.id;
-        markSkipBaselineForNewOrder(res.order.id);
-        setPrintedQty({});
-        setOrder(res.order);
-        router.replace(`/pos/order?id=${res.order.id}`);
-        return;
-      }
-
-      const oid = effectiveOrderId;
-      if (!oid || !orderIsOpen) return;
       const res = await ikassirInvoke<{ ok: boolean; order?: OrderDetail; error?: string }>(
         "orders.addLine",
-        { orderId: oid, productId, qty: 1, actorUserId: session.id },
+        { orderId, productId, qty: 1, actorUserId: session.id },
       );
       if (!res.ok || !res.order) setError(res.error ?? "Could not add item");
       else setOrder(res.order);
@@ -499,21 +384,15 @@ export function OrderWorkspace() {
     setBusy(true);
     setError(null);
     try {
-      const res = await ikassirInvoke<
-        | { ok: true; order: OrderDetail }
-        | { ok: true; abandoned: true }
-        | { ok: false; error?: string }
-      >("orders.removeLine", { orderId: oid, lineId, actorUserId: session.id });
-      if (!res.ok) {
-        setError("error" in res ? (res.error ?? "Remove failed") : "Remove failed");
+      const res = await ikassirInvoke<{ ok: boolean; order?: OrderDetail; error?: string }>(
+        "orders.removeLine",
+        { orderId: oid, lineId, actorUserId: session.id },
+      );
+      if (!res.ok || !res.order) {
+        setError(res.error ?? "Remove failed");
         return;
       }
-      if ("abandoned" in res && res.abandoned) {
-        setOrder(null);
-        router.push("/pos/create");
-        return;
-      }
-      if ("order" in res && res.order) setOrder(res.order);
+      setOrder(res.order);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Failed");
     } finally {
@@ -544,49 +423,12 @@ export function OrderWorkspace() {
     }
   }
 
-  const hasPrintedOnce = useMemo(
-    () => Object.values(printedQty).some((q) => q > 0),
-    [printedQty],
-  );
-
-  const hasNewItems = useMemo(
-    () => (viewOrder ? hasAnyNewItems(printedQty, viewOrder.lines) : false),
-    [printedQty, viewOrder],
-  );
-
   function closeReceiptModal() {
-    if (!printJob) return;
-    const job = printJob;
-    if (job.commitCheckpoint) {
-      setPrintedQty((prev) =>
-        commitPrintedAfterPrint(prev, printLinesRef.current, job.mode),
-      );
-    }
     setPrintJob(null);
+    setPrintBusy(false);
   }
 
-  function showReceipt(mode: "full" | "new") {
-    if (!viewOrder || viewOrder.lines.length === 0) return;
-    const lines =
-      mode === "full"
-        ? receiptLinesForFull(viewOrder.lines)
-        : receiptLinesForNewItems(printedQty, viewOrder.lines);
-    if (lines.length === 0) return;
-
-    const pct = Number.parseFloat(settings?.service_fee_percent ?? "10");
-    const deliveryRaw = Number.parseFloat(settings?.delivery_fee_tmt ?? "3");
-    const totals = calcReceiptTotals(viewOrder.type, lines, {
-      serviceFeePercent: Number.isFinite(pct) ? pct : 10,
-      fullDeliveryFeeTmt:
-        viewOrder.deliveryFeeTmt || (Number.isFinite(deliveryRaw) ? deliveryRaw : 3),
-      includeDelivery: mode === "full",
-    });
-
-    printLinesRef.current = viewOrder.lines;
-    setPrintJob({ mode, lines, totals, commitCheckpoint: true });
-  }
-
-  if (!orderId && !draft) {
+  if (!orderId) {
     return (
       <div className="space-y-4">
         <PageHeader title={t("pos.order.title")} backHref="/pos/open" />
@@ -630,7 +472,70 @@ export function OrderWorkspace() {
 
   const servicePct = settings?.service_fee_percent ?? "10";
   const deliveryFee = settings?.delivery_fee_tmt ?? "3";
-  const isPreview = !orderId && draft != null && order == null;
+  function showReceipt() {
+    if (!viewOrder || viewOrder.lines.length === 0 || !orderIsOpen) return;
+    setPrintJob({
+      allLines: receiptLinesForFull(viewOrder.lines),
+      omittedLineIds: [],
+      editable: true,
+    });
+  }
+
+  function toggleLineOnReceipt(lineId: string) {
+    setPrintJob((j) => {
+      if (!j?.editable) return j;
+      const omitted = j.omittedLineIds.includes(lineId)
+        ? j.omittedLineIds.filter((id) => id !== lineId)
+        : [...j.omittedLineIds, lineId];
+      return { ...j, omittedLineIds: omitted };
+    });
+  }
+
+  function resetReceiptLines() {
+    setPrintJob((j) => (j?.editable ? { ...j, omittedLineIds: [] } : j));
+  }
+
+  function buildPrintPayload(): ReceiptPrintPayload | null {
+    if (!printJob || !order || !viewOrder || !receiptDisplayTotals) return null;
+    return {
+      venueName,
+      orderId: order.id,
+      orderTypeLabel: orderTypeLabel(viewOrder.type),
+      tableLabel: viewOrder.table?.label ?? null,
+      timestamp: order.openedAt,
+      orderType: viewOrder.type,
+      lines: receiptVisibleLines,
+      totals: receiptDisplayTotals,
+      servicePct,
+      deliveryFee,
+      labels: {
+        orderIdPrefix: t("pos.order.printOrderId"),
+        subtotal: t("pos.order.subtotal"),
+        service: t("pos.order.service", { pct: servicePct }),
+        delivery: t("pos.order.deliveryLine", { fee: deliveryFee }),
+        total: t("pos.order.total"),
+      },
+    };
+  }
+
+  async function handlePrintReceipt() {
+    const payload = buildPrintPayload();
+    if (!payload || receiptVisibleLines.length === 0) return;
+    if (!window.ikassir) {
+      setError(t("pos.order.receiptPrintElectronOnly"));
+      return;
+    }
+    setPrintBusy(true);
+    setError(null);
+    try {
+      const res = await ikassirInvoke<{ ok: boolean; error?: string }>("print.receipt", payload);
+      if (!res.ok) setError(res.error ?? t("pos.order.receiptPrintFailed"));
+    } catch (e) {
+      setError(e instanceof Error ? e.message : t("pos.order.receiptPrintFailed"));
+    } finally {
+      setPrintBusy(false);
+    }
+  }
 
   return (
     <div className="flex min-h-0 flex-1 flex-col gap-3 overflow-hidden print:min-h-0 print:overflow-visible print:gap-2">
@@ -642,7 +547,7 @@ export function OrderWorkspace() {
               {viewOrder.table ? ` · ${viewOrder.table.label}` : ""}
             </>
           }
-          backHref="/pos/open"
+          onBack={handleLeaveToOpen}
           actions={
             <div
               role="group"
@@ -755,22 +660,11 @@ export function OrderWorkspace() {
               {viewOrder.lines.length === 0 ? (
                 <li className="py-8 text-center text-stone-500">{t("pos.order.cartEmpty")}</li>
               ) : (
-                viewOrder.lines.map((line) => {
-                  const printed = lineHasPrintedQty(printedQty, line.id);
-                  const newQty = lineNewQty(printedQty, line);
-                  return (
-                  <li
-                    key={line.id}
-                    className={`py-4 ${printed ? "rounded-xl bg-amber-50/90 -mx-2 px-2" : ""}`}
-                  >
+                viewOrder.lines.map((line) => (
+                  <li key={line.id} className="py-4">
                     <div className="flex items-start justify-between gap-2">
                       <span className="min-w-0 flex-1 font-medium leading-snug text-stone-900">
                         {line.productName}
-                        {printed && newQty > 0 ? (
-                          <span className="ml-2 text-xs font-medium text-amber-800">
-                            {t("pos.order.receiptNewQty", { qty: String(newQty) })}
-                          </span>
-                        ) : null}
                       </span>
                       <span className="shrink-0 text-base font-semibold text-stone-900">
                         {formatTmt(line.lineTotalTmt)}
@@ -817,8 +711,7 @@ export function OrderWorkspace() {
                       </p>
                     )}
                   </li>
-                  );
-                })
+                ))
               )}
             </ul>
           </div>
@@ -852,31 +745,21 @@ export function OrderWorkspace() {
 
           <div className="shrink-0 border-t border-stone-200 bg-white p-4 sm:p-5 sm:pt-4">
             {viewOrder.status === OrderStatus.OPEN ? (
-              <div className="space-y-2">
-                {!isPreview && effectiveOrderId ? (
-                  <div className="flex gap-2">
-                    <button
-                      type="button"
-                      disabled={busy || viewOrder.lines.length === 0}
-                      className={btnReceipt}
-                      onClick={() => showReceipt("full")}
-                    >
-                      {t("pos.order.printReceiptFull")}
-                    </button>
-                    <button
-                      type="button"
-                      disabled={busy || !hasPrintedOnce || !hasNewItems}
-                      className={btnReceipt}
-                      onClick={() => showReceipt("new")}
-                    >
-                      {t("pos.order.printReceiptNew")}
-                    </button>
-                  </div>
+              <div className="flex gap-2">
+                {effectiveOrderId ? (
+                  <button
+                    type="button"
+                    disabled={busy || viewOrder.lines.length === 0}
+                    className={`${btnReceipt} flex-1`}
+                    onClick={() => showReceipt()}
+                  >
+                    {t("pos.order.printReceiptFull")}
+                  </button>
                 ) : null}
                 <button
                   type="button"
-                  disabled={busy || viewOrder.lines.length === 0 || isPreview}
-                  className={btnPrimary}
+                  disabled={busy || viewOrder.lines.length === 0}
+                  className={`${btnPrimary} ${effectiveOrderId ? "flex-1" : "w-full"}`}
                   onClick={() => void closeOrder()}
                 >
                   {t("pos.order.payClose")}
@@ -888,17 +771,16 @@ export function OrderWorkspace() {
                 className={btnPrimary}
                 onClick={() => {
                   if (!order) return;
-                  printLinesRef.current = order.lines;
                   setPrintJob({
-                    mode: "full",
-                    lines: receiptLinesForFull(order.lines),
+                    allLines: receiptLinesForFull(order.lines),
+                    omittedLineIds: [],
+                    editable: false,
                     totals: {
                       subtotalTmt: order.subtotalTmt,
                       serviceFeeTmt: order.serviceFeeTmt,
                       deliveryFeeTmt: order.deliveryFeeTmt,
                       totalTmt: order.totalTmt,
                     },
-                    commitCheckpoint: false,
                   });
                 }}
               >
@@ -909,29 +791,48 @@ export function OrderWorkspace() {
         </aside>
       </div>
 
-      {printJob && order?.id ? (
+      {printJob && order?.id && receiptDisplayTotals ? (
         <ReceiptModal
           open
           onClose={closeReceiptModal}
-          title={
-            printJob.mode === "new"
-              ? t("pos.order.printReceiptNew")
-              : t("pos.order.printReceiptFull")
+          title={t("pos.order.printReceipt")}
+          onReset={
+            printJob.editable && printJob.omittedLineIds.length > 0 ? resetReceiptLines : undefined
           }
+          onPrint={printJob.editable ? () => void handlePrintReceipt() : undefined}
+          printBusy={printBusy}
         >
-          <OrderReceiptView
-            venueName={venueName}
-            orderId={order.id}
-            orderType={viewOrder.type}
-            tableLabel={viewOrder.table?.label ?? null}
-            timestamp={order.closedAt ?? order.openedAt}
-            lines={printJob.lines}
-            totals={printJob.totals}
-            orderTypeLabel={orderTypeLabel}
-            servicePct={servicePct}
-            deliveryFee={deliveryFee}
-            t={t}
-          />
+          {printJob.editable ? (
+            <EditableOrderReceiptView
+              venueName={venueName}
+              orderId={order.id}
+              orderType={viewOrder.type}
+              tableLabel={viewOrder.table?.label ?? null}
+              timestamp={order.openedAt}
+              allLines={printJob.allLines}
+              omittedLineIds={printJob.omittedLineIds}
+              totals={receiptDisplayTotals}
+              orderTypeLabel={orderTypeLabel}
+              servicePct={servicePct}
+              deliveryFee={deliveryFee}
+              onToggleLine={toggleLineOnReceipt}
+              t={t}
+            />
+          ) : (
+            <OrderReceiptView
+              venueName={venueName}
+              orderId={order.id}
+              orderType={viewOrder.type}
+              tableLabel={viewOrder.table?.label ?? null}
+              timestamp={order.closedAt ?? order.openedAt}
+              lines={receiptVisibleLines}
+              totals={receiptDisplayTotals}
+              orderTypeLabel={orderTypeLabel}
+              servicePct={servicePct}
+              deliveryFee={deliveryFee}
+              t={t}
+            />
+          )}
         </ReceiptModal>
       ) : null}
     </div>
