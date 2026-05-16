@@ -1,3 +1,8 @@
+/** Plain amount for thermal receipts (e.g. `30.00`). */
+export function formatReceiptAmount(amount: number): string {
+  return amount.toFixed(2);
+}
+
 /** All money amounts in the app are Turkmenistan manat (TMT). */
 export function formatTmt(amount: number): string {
   try {

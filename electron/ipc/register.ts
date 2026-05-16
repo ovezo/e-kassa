@@ -12,9 +12,10 @@ const envelope = z.object({
 
 const printReceiptSchema = z.object({
   venueName: z.string(),
-  orderId: z.string(),
-  orderTypeLabel: z.string(),
-  tableLabel: z.string().nullable(),
+  venueAddress: z.string(),
+  cashierName: z.string(),
+  customerLabel: z.string(),
+  note: z.string(),
   timestamp: z.string(),
   orderType: z.enum(["TABLE", "TAKEAWAY_PICKUP", "TAKEAWAY_DELIVERY"]),
   lines: z.array(
@@ -32,15 +33,22 @@ const printReceiptSchema = z.object({
     deliveryFeeTmt: z.number(),
     totalTmt: z.number(),
   }),
-  servicePct: z.string(),
-  deliveryFee: z.string(),
   labels: z.object({
-    orderIdPrefix: z.string(),
-    subtotal: z.string(),
-    service: z.string(),
-    delivery: z.string(),
-    total: z.string(),
+    kassir: z.string(),
+    musderi: z.string(),
+    bellik: z.string(),
+    wagt: z.string(),
+    sene: z.string(),
+    colProduct: z.string(),
+    colQty: z.string(),
+    colPrice: z.string(),
+    colTotal: z.string(),
+    grandTotal: z.string(),
+    eltipBerme: z.string(),
+    hyzmat: z.string(),
+    footer: z.string(),
   }),
+  servicePct: z.string(),
 });
 
 export function registerIpcHandlers(prisma: PrismaClient): void {

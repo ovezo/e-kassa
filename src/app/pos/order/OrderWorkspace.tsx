@@ -16,7 +16,12 @@ import {
   type ReceiptLine,
   type ReceiptTotals,
 } from "@/lib/pos/receipt-print";
-import type { ReceiptPrintPayload } from "@/lib/pos/receipt-html";
+import { printReceiptInBrowser } from "@/lib/pos/print-receipt-browser";
+import {
+  buildReceiptPrintPayload,
+  receiptCustomerLabel,
+  receiptPrintLabels,
+} from "@/lib/pos/receipt-print-payload";
 import { discardEmptyOrderIfNeeded } from "@/lib/pos/discard-empty-order";
 import { readSession } from "@/lib/session";
 import { productImageDisplayUrl } from "@/lib/product-image-url";
@@ -495,46 +500,36 @@ export function OrderWorkspace() {
     setPrintJob((j) => (j?.editable ? { ...j, omittedLineIds: [] } : j));
   }
 
-  function buildPrintPayload(): ReceiptPrintPayload | null {
-    if (!printJob || !order || !viewOrder || !receiptDisplayTotals) return null;
-    return {
+  function buildPrintPayload() {
+    if (!printJob || !order || !viewOrder || !receiptDisplayTotals || !session) return null;
+    const labels = receiptPrintLabels(t);
+    labels.footer = settings?.receipt_footer ?? labels.footer;
+    return buildReceiptPrintPayload({
       venueName,
-      orderId: order.id,
-      orderTypeLabel: orderTypeLabel(viewOrder.type),
-      tableLabel: viewOrder.table?.label ?? null,
+      venueAddress: settings?.venue_address ?? "",
+      cashierName: session.displayName,
+      customerLabel: receiptCustomerLabel(
+        viewOrder.type,
+        orderTypeLabel(viewOrder.type),
+        viewOrder.table?.label ?? null,
+      ),
       timestamp: order.openedAt,
       orderType: viewOrder.type,
       lines: receiptVisibleLines,
       totals: receiptDisplayTotals,
+      labels,
       servicePct,
-      deliveryFee,
-      labels: {
-        orderIdPrefix: t("pos.order.printOrderId"),
-        subtotal: t("pos.order.subtotal"),
-        service: t("pos.order.service", { pct: servicePct }),
-        delivery: t("pos.order.deliveryLine", { fee: deliveryFee }),
-        total: t("pos.order.total"),
-      },
-    };
+    });
   }
 
-  async function handlePrintReceipt() {
+  function handlePrintReceipt() {
     const payload = buildPrintPayload();
     if (!payload || receiptVisibleLines.length === 0) return;
-    if (!window.ikassir) {
-      setError(t("pos.order.receiptPrintElectronOnly"));
-      return;
-    }
     setPrintBusy(true);
     setError(null);
-    try {
-      const res = await ikassirInvoke<{ ok: boolean; error?: string }>("print.receipt", payload);
-      if (!res.ok) setError(res.error ?? t("pos.order.receiptPrintFailed"));
-    } catch (e) {
-      setError(e instanceof Error ? e.message : t("pos.order.receiptPrintFailed"));
-    } finally {
-      setPrintBusy(false);
-    }
+    const res = printReceiptInBrowser(payload);
+    if (!res.ok) setError(res.error ?? t("pos.order.receiptPrintFailed"));
+    setPrintBusy(false);
   }
 
   return (
@@ -799,7 +794,7 @@ export function OrderWorkspace() {
           onReset={
             printJob.editable && printJob.omittedLineIds.length > 0 ? resetReceiptLines : undefined
           }
-          onPrint={printJob.editable ? () => void handlePrintReceipt() : undefined}
+          onPrint={() => handlePrintReceipt()}
           printBusy={printBusy}
         >
           {printJob.editable ? (

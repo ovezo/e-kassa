@@ -13,8 +13,14 @@ import {
   type ReceiptLine,
   type ReceiptTotals,
 } from "@/lib/pos/receipt-print";
-import type { ReceiptPrintPayload } from "@/lib/pos/receipt-html";
+import { printReceiptInBrowser } from "@/lib/pos/print-receipt-browser";
+import {
+  buildReceiptPrintPayload,
+  receiptCustomerLabel,
+  receiptPrintLabels,
+} from "@/lib/pos/receipt-print-payload";
 import { useTranslations } from "@/lib/i18n/LocaleProvider";
+import { readSession } from "@/lib/session";
 import { OrderType } from "@prisma/client";
 
 type PrintJob = {
@@ -155,39 +161,35 @@ export function OrderReceiptDialog({ orderId, onClose }: OrderReceiptDialogProps
     onClose();
   }
 
-  async function handlePrintReceipt() {
+  function handlePrintReceipt() {
     if (!printJob || !order || !receiptDisplayTotals || receiptVisibleLines.length === 0) return;
-    if (!window.ikassir) return;
 
-    const payload: ReceiptPrintPayload = {
+    const session = readSession();
+    if (!session) return;
+    const labels = receiptPrintLabels(t);
+    labels.footer = settings?.receipt_footer ?? labels.footer;
+    const payload = buildReceiptPrintPayload({
       venueName,
-      orderId: order.id,
-      orderTypeLabel: orderTypeLabel(order.type),
-      tableLabel: order.table?.label ?? null,
+      venueAddress: settings?.venue_address ?? "",
+      cashierName: session.displayName,
+      customerLabel: receiptCustomerLabel(
+        order.type,
+        orderTypeLabel(order.type),
+        order.table?.label ?? null,
+      ),
       timestamp: order.openedAt,
       orderType: order.type,
       lines: receiptVisibleLines,
       totals: receiptDisplayTotals,
+      labels,
       servicePct,
-      deliveryFee,
-      labels: {
-        orderIdPrefix: t("pos.order.printOrderId"),
-        subtotal: t("pos.order.subtotal"),
-        service: t("pos.order.service", { pct: servicePct }),
-        delivery: t("pos.order.deliveryLine", { fee: deliveryFee }),
-        total: t("pos.order.total"),
-      },
-    };
+    });
 
     setPrintBusy(true);
-    try {
-      const res = await ikassirInvoke<{ ok: boolean; error?: string }>("print.receipt", payload);
-      if (!res.ok) setError(res.error ?? t("pos.order.receiptPrintFailed"));
-    } catch (e) {
-      setError(e instanceof Error ? e.message : t("pos.order.receiptPrintFailed"));
-    } finally {
-      setPrintBusy(false);
-    }
+    setError(null);
+    const res = printReceiptInBrowser(payload);
+    if (!res.ok) setError(res.error ?? t("pos.order.receiptPrintFailed"));
+    setPrintBusy(false);
   }
 
   if (!orderId) return null;
@@ -216,7 +218,7 @@ export function OrderReceiptDialog({ orderId, onClose }: OrderReceiptDialogProps
       onReset={
         printJob.editable && printJob.omittedLineIds.length > 0 ? resetReceiptLines : undefined
       }
-      onPrint={printJob.editable ? () => void handlePrintReceipt() : undefined}
+      onPrint={() => handlePrintReceipt()}
       printBusy={printBusy}
     >
       {printJob.editable ? (

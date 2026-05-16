@@ -100,6 +100,16 @@ export default function AdminDashboardPage() {
               onSave={(v) => void saveSetting("venue_name", v)}
             />
             <QuickSetting
+              label="Venue address (on receipt)"
+              initial={settings.venue_address ?? ""}
+              onSave={(v) => void saveSetting("venue_address", v)}
+            />
+            <QuickSetting
+              label="Receipt footer message"
+              initial={settings.receipt_footer ?? "NOŞ BOLSUN !"}
+              onSave={(v) => void saveSetting("receipt_footer", v)}
+            />
+            <QuickSetting
               label="Service fee % (table orders)"
               initial={settings.service_fee_percent ?? "10"}
               onSave={(v) => void saveSetting("service_fee_percent", v)}

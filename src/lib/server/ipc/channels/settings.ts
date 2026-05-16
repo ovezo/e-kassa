@@ -6,6 +6,8 @@ const DEFAULTS: Record<string, string> = {
   service_fee_percent: "10",
   delivery_fee_tmt: "3",
   venue_name: "iKassir",
+  venue_address: "",
+  receipt_footer: "NOŞ BOLSUN !",
 };
 
 export async function handleSettingsChannel(
