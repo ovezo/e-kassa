@@ -64,4 +64,3 @@ export function setupPrismaForElectron(): void {
   }
 }
 
-setupPrismaForElectron();

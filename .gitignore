@@ -19,6 +19,7 @@
 /build
 /dist-electron
 /release
+/build/prisma-ship
 
 # misc
 .DS_Store

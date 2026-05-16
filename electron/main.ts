@@ -1,14 +1,15 @@
-import "./db/setup-prisma";
+import "./boot-log";
 import fs from "fs";
 import net, { type AddressInfo } from "net";
 import http from "http";
 import path from "path";
 import { spawn, type ChildProcess } from "child_process";
-import { app, BrowserWindow } from "electron";
+import { app, BrowserWindow, dialog } from "electron";
+import { appendBootLog, bootLogPath } from "./boot-log";
+import { appendLog, logFileLocation } from "./log-file";
 import { PRODUCT_IMAGES_DEV_POINTER_FILENAME } from "../src/lib/server/product-images";
 import { ensureDatabase } from "./db/bootstrap";
-import { getPrisma, disconnectPrisma } from "./db/prisma";
-import { registerIpcHandlers } from "./ipc/register";
+import { setupPrismaForElectron } from "./db/setup-prisma";
 
 function appRoot(): string {
   return app.isPackaged ? app.getAppPath() : process.cwd();
@@ -21,10 +22,10 @@ function nextStandaloneDir(): string {
   return path.join(process.cwd(), ".next", "standalone");
 }
 
-/** `next dev` — Next is already running on 3000 (see npm script: both must use NODE_ENV=development). */
-const isNextDevSession = process.env.NODE_ENV === "development";
-
-console.error("[iKassir] Electron main loaded. NODE_ENV=%s → %s", process.env.NODE_ENV ?? "(unset)", isNextDevSession ? "load http://127.0.0.1:3000 (next dev)" : "spawn Next standalone server (production)");
+/** Only true when running `npm run dev` — never for the installed .exe. */
+function isNextDevSession(): boolean {
+  return !app.isPackaged && process.env.NODE_ENV === "development";
+}
 
 let nextChild: ChildProcess | null = null;
 let nextProdBaseUrl: string | null = null;
@@ -32,8 +33,21 @@ let mainWindow: BrowserWindow | null = null;
 
 const gotSingleInstanceLock = app.requestSingleInstanceLock();
 if (!gotSingleInstanceLock) {
+  appendBootLog("Second instance blocked — another iKassir is already running");
   app.quit();
   process.exit(0);
+}
+
+appendBootLog("Main process starting", {
+  packaged: app.isPackaged,
+  nodeEnv: process.env.NODE_ENV ?? "(unset)",
+});
+
+function fatalStartup(title: string, message: string, detail?: unknown): void {
+  appendBootLog(`FATAL: ${title}`, detail ?? message);
+  const body = `${message}\n\nLog file:\n${bootLogPath()}`;
+  dialog.showErrorBox(title, body);
+  app.exit(1);
 }
 
 function killNextChild(): void {
@@ -60,7 +74,6 @@ function resolveDbPath(): string {
   return path.join(appRoot(), "prisma", "dev.db");
 }
 
-/** Writable product photos — always under Electron `userData` (dev + prod) so IPC and Next match shipped behavior. */
 function resolveProductImagesDir(): string {
   return path.join(app.getPath("userData"), "product-images");
 }
@@ -104,10 +117,22 @@ function waitForHttpOk(url: string, timeoutMs: number): Promise<void> {
   });
 }
 
+function waitForNextChildCrash(child: ChildProcess): Promise<void> {
+  return new Promise((resolve, reject) => {
+    child.once("exit", (code, signal) => {
+      if (code !== 0 && code !== null) {
+        reject(new Error(`Next server exited early (code=${code}, signal=${signal})`));
+      } else {
+        resolve();
+      }
+    });
+  });
+}
+
 function pipeNextLogs(child: ChildProcess): void {
   const tag = (chunk: Buffer) => {
     for (const line of chunk.toString().split(/\r?\n/)) {
-      if (line.trim()) console.error("[iKassir][next]", line);
+      if (line.trim()) appendLog("[next] " + line);
     }
   };
   child.stdout?.on("data", tag);
@@ -115,7 +140,7 @@ function pipeNextLogs(child: ChildProcess): void {
 }
 
 async function ensureRendererBaseUrl(): Promise<string> {
-  if (isNextDevSession) {
+  if (isNextDevSession()) {
     return "http://127.0.0.1:3000";
   }
 
@@ -129,7 +154,7 @@ async function ensureRendererBaseUrl(): Promise<string> {
 
   if (!fs.existsSync(serverJs)) {
     throw new Error(
-      `Next standalone server missing at ${serverJs}. Rebuild with npm run dist:win.`,
+      `Next UI server missing at ${serverJs}. Rebuild with: npm run dist:win`,
     );
   }
 
@@ -137,7 +162,7 @@ async function ensureRendererBaseUrl(): Promise<string> {
     process.env.IKASSIR_PRODUCT_IMAGES_ROOT?.trim() ||
     path.join(app.getPath("userData"), "product-images");
 
-  console.error("[iKassir] Starting Next standalone: %s (port %s)", serverJs, port);
+  appendLog("Starting Next standalone", { serverJs, port, serverDir });
 
   nextChild = spawn(process.execPath, [serverJs], {
     cwd: serverDir,
@@ -156,60 +181,67 @@ async function ensureRendererBaseUrl(): Promise<string> {
   pipeNextLogs(nextChild);
 
   nextChild.on("error", (err) => {
-    console.error("[iKassir] Next server failed to spawn:", err);
+    appendLog("Next server spawn error", err);
   });
 
   nextChild.on("exit", (code, signal) => {
-    console.error("[iKassir] Next server exited (code=%s signal=%s)", code, signal);
+    appendLog("Next server exited", { code, signal });
     nextChild = null;
     nextProdBaseUrl = null;
   });
 
   const base = `http://127.0.0.1:${port}`;
-  await waitForHttpOk(`${base}/`, 90_000);
+  const url = `${base}/`;
+
+  await Promise.race([waitForHttpOk(url, 120_000), waitForNextChildCrash(nextChild)]);
+
   nextProdBaseUrl = base;
   return base;
 }
 
 async function createMainWindow(): Promise<void> {
+  appendLog("Creating main window");
+
   const win = new BrowserWindow({
     width: 1280,
     height: 800,
     minWidth: 900,
     minHeight: 600,
     title: "iKassir",
-    show: false,
+    show: true,
+    autoHideMenuBar: true,
     webPreferences: {
       preload: path.join(__dirname, "preload.js"),
       contextIsolation: true,
       nodeIntegration: false,
-      sandbox: true,
+      sandbox: false,
     },
   });
   mainWindow = win;
+  win.show();
+  win.focus();
 
   win.on("closed", () => {
     if (mainWindow === win) mainWindow = null;
   });
 
   win.webContents.on("did-fail-load", (_ev, code, desc, url) => {
-    console.error("[iKassir] did-fail-load code=%s desc=%s url=%s", code, desc, url);
+    appendLog("did-fail-load", { code, desc, url });
   });
 
-  win.once("ready-to-show", () => {
-    win.show();
-    win.focus();
-    if (process.platform === "darwin") {
-      app.focus({ steal: true });
-    }
-    console.error("[iKassir] Window ready: %s", win.getTitle());
-  });
+  await win.loadURL(
+    "data:text/html;charset=utf-8," +
+      encodeURIComponent(
+        "<!doctype html><body style='font-family:Segoe UI,sans-serif;padding:2rem;color:#444'>" +
+          "<h2>iKassir</h2><p>Starting…</p></body>",
+      ),
+  );
 
   const base = await ensureRendererBaseUrl();
-  console.error("[iKassir] Loading renderer: %s/", base);
+  appendLog("Loading renderer", base);
   await win.loadURL(`${base}/`);
 
-  if (isNextDevSession) {
+  if (isNextDevSession()) {
     win.webContents.openDevTools({ mode: "detach" });
   }
 }
@@ -217,20 +249,39 @@ async function createMainWindow(): Promise<void> {
 function focusOrCreateMainWindow(): void {
   if (mainWindow && !mainWindow.isDestroyed()) {
     if (mainWindow.isMinimized()) mainWindow.restore();
+    mainWindow.show();
     mainWindow.focus();
     return;
   }
   void createMainWindow().catch((e) => {
-    console.error("[iKassir] Failed to open window:", e);
-    app.quit();
+    fatalStartup("iKassir — UI failed", e instanceof Error ? e.message : String(e), e);
   });
 }
 
 app.on("second-instance", () => {
+  appendBootLog("Second instance — focusing main window");
   focusOrCreateMainWindow();
 });
 
-app.whenReady().then(() => {
+app.whenReady().then(async () => {
+  appendLog("App ready", {
+    packaged: app.isPackaged,
+    userData: app.getPath("userData"),
+    resources: process.resourcesPath,
+    isNextDev: isNextDevSession(),
+  });
+
+  try {
+    setupPrismaForElectron();
+  } catch (e) {
+    fatalStartup(
+      "iKassir — database engine",
+      e instanceof Error ? e.message : String(e),
+      e,
+    );
+    return;
+  }
+
   const dbPath = resolveDbPath();
   const dbDir = path.dirname(dbPath);
   if (!fs.existsSync(dbDir)) {
@@ -241,15 +292,14 @@ app.whenReady().then(() => {
   if (!fs.existsSync(productImagesDir)) {
     fs.mkdirSync(productImagesDir, { recursive: true });
   }
-  console.error("[iKassir] Database path:", dbPath);
-  console.error("[iKassir] Product images dir:", productImagesDir);
+  appendLog("Paths", { dbPath, productImagesDir });
 
-  if (isNextDevSession && !app.isPackaged) {
+  if (isNextDevSession()) {
     try {
       const pointerPath = path.join(appRoot(), PRODUCT_IMAGES_DEV_POINTER_FILENAME);
       fs.writeFileSync(pointerPath, `${productImagesDir}\n`, "utf8");
     } catch (e) {
-      console.error("[iKassir] Failed to write", PRODUCT_IMAGES_DEV_POINTER_FILENAME, "for Next dev:", e);
+      appendLog("Failed to write dev product-images pointer", e);
     }
   }
 
@@ -257,20 +307,32 @@ app.whenReady().then(() => {
     try {
       ensureDatabase(dbPath, appRoot());
     } catch (e) {
-      console.error("[iKassir] Database setup failed:", e);
-      app.quit();
+      fatalStartup(
+        "iKassir — database setup",
+        e instanceof Error ? e.message : String(e),
+        e,
+      );
       return;
     }
   }
+
+  const { getPrisma, disconnectPrisma } = await import("./db/prisma");
+  const { registerIpcHandlers } = await import("./ipc/register");
+
   let prisma;
   try {
     prisma = getPrisma(dbPath);
   } catch (e) {
-    console.error("[iKassir] Prisma init failed:", e);
-    app.quit();
+    fatalStartup(
+      "iKassir — database connection",
+      e instanceof Error ? e.message : String(e),
+      e,
+    );
     return;
   }
+
   registerIpcHandlers(prisma);
+  appendLog("IPC registered, opening window");
   focusOrCreateMainWindow();
 
   app.on("activate", () => {
@@ -278,16 +340,22 @@ app.whenReady().then(() => {
       focusOrCreateMainWindow();
     }
   });
+
+  app.on("before-quit", () => {
+    killNextChild();
+    void disconnectPrisma();
+  });
 });
 
-app.on("window-all-closed", () => {
+app.on("window-all-closed", async () => {
   if (process.platform !== "darwin") {
     killNextChild();
-    void disconnectPrisma().finally(() => app.quit());
+    try {
+      const { disconnectPrisma } = await import("./db/prisma");
+      await disconnectPrisma();
+    } catch {
+      // ignore
+    }
+    app.quit();
   }
-});
-
-app.on("before-quit", () => {
-  killNextChild();
-  void disconnectPrisma();
 });

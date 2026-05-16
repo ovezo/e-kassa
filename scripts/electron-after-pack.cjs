@@ -72,4 +72,34 @@ exports.default = async function afterPack(context) {
         "ensure package.json asarUnpack includes node_modules/@prisma/client/**",
     );
   }
+
+  const resources = path.join(context.appOutDir, "resources");
+  const nextServer = path.join(resources, "next-standalone", "server.js");
+  if (!fs.existsSync(nextServer)) {
+    throw new Error(
+      `Next standalone missing (${nextServer}). Run npm run build before electron-builder.`,
+    );
+  }
+
+  const templateDb = path.join(resources, "ikassir-template.db");
+  if (!fs.existsSync(templateDb)) {
+    throw new Error(
+      `Template database missing (${templateDb}). Run npm run prepare:pack before dist:win.`,
+    );
+  }
+
+  const prismaResources = path.join(resources, "prisma");
+  if (fs.existsSync(prismaResources)) {
+    for (const name of fs.readdirSync(prismaResources)) {
+      if (!name.endsWith(".db") && !name.endsWith(".db-journal")) continue;
+      const file = path.join(prismaResources, name);
+      if (!fs.statSync(file).isFile()) continue;
+      console.warn("[iKassir] afterPack: removing stray database file from installer:", file);
+      fs.unlinkSync(file);
+    }
+    const stillDevDb = path.join(prismaResources, "dev.db");
+    if (fs.existsSync(stillDevDb)) {
+      throw new Error(`Could not remove dev.db from bundle (${stillDevDb}).`);
+    }
+  }
 };

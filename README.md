@@ -99,7 +99,20 @@ If you see **Cannot find module '.prisma/client/default'** after an older build,
 
 ### Blank window or app won’t open again (Windows)
 
-The UI is served by a small **Next.js server** bundled next to the app (not inside `app.asar`). If an old build left **iKassir** or **Electron** running in Task Manager, quit them (or end task), then start again. New builds use a real folder for that server and stop it when you close the window.
+The UI is served by a small **Next.js server** in `resources/next-standalone/` (not inside `app.asar`). If an old build left **iKassir** running in Task Manager, end that task, then start again.
+
+If the app exits immediately, open the log file (the error dialog shows the path), usually:
+
+`%APPDATA%\iKassir\ikassir.log` (folder name is **iKassir** with capital K — same as `Roaming\ikassir` on Windows)
+
+### `dev.db` inside `resources\prisma` (installed app)
+
+That file must **not** be there — it is only for development. The installed app uses:
+
+- **Your data:** `%APPDATA%\iKassir\ikassir.db`
+- **First-run template:** `resources\ikassir-template.db` (not `dev.db`)
+
+If you see `dev.db` under `resources\prisma`, you are on an **old installer**. Rebuild with the latest code: `npm run prepare:pack` then `npm run dist:win`. New builds copy only `schema.prisma` + `migrations` into `resources\prisma` (no `.db` files).
 
 ### `no such table: Product` (SQLite)
 

@@ -8,18 +8,19 @@ function databaseUrl(dbFilePath: string): string {
   return `file:${normalized}`;
 }
 
+/** Schema + migrations for packaged builds (real folder under `resources/`). */
 function resolvePrismaDir(appRoot: string): string {
+  if (app.isPackaged) {
+    const resourcesPrisma = path.join(process.resourcesPath, "prisma");
+    if (fs.existsSync(path.join(resourcesPrisma, "schema.prisma"))) {
+      return resourcesPrisma;
+    }
+  }
   const bundled = path.join(appRoot, "prisma");
   if (fs.existsSync(path.join(bundled, "schema.prisma"))) {
     return bundled;
   }
-  if (app.isPackaged) {
-    const extra = path.join(process.resourcesPath, "prisma");
-    if (fs.existsSync(path.join(extra, "schema.prisma"))) {
-      return extra;
-    }
-  }
-  return bundled;
+  throw new Error("Database schema missing in application bundle");
 }
 
 function resolveTemplateDbPath(): string | null {
@@ -28,18 +29,31 @@ function resolveTemplateDbPath(): string | null {
   return fs.existsSync(p) ? p : null;
 }
 
+function resolvePrismaCli(): string {
+  const unpacked = path.join(
+    process.resourcesPath,
+    "app.asar.unpacked",
+    "node_modules",
+    "prisma",
+    "build",
+    "index.js",
+  );
+  if (fs.existsSync(unpacked)) {
+    return unpacked;
+  }
+  const inAsar = path.join(app.getAppPath(), "node_modules", "prisma", "build", "index.js");
+  if (fs.existsSync(inAsar)) {
+    return inAsar;
+  }
+  throw new Error("Prisma CLI missing in application bundle");
+}
+
 function runMigrateDeploy(
   dbFilePath: string,
-  appRoot: string,
   prismaDir: string,
   schemaPath: string,
 ): void {
-  const prismaCli = path.join(appRoot, "node_modules", "prisma", "build", "index.js");
-  if (!fs.existsSync(prismaCli)) {
-    console.error("[iKassir] Prisma CLI not found at", prismaCli);
-    throw new Error("Prisma CLI missing in application bundle");
-  }
-
+  const prismaCli = resolvePrismaCli();
   const env = {
     ...process.env,
     ELECTRON_RUN_AS_NODE: "1",
@@ -55,6 +69,7 @@ function runMigrateDeploy(
       env,
       stdio: "pipe",
       encoding: "utf-8",
+      windowsHide: true,
     },
   );
 
@@ -74,11 +89,6 @@ export function ensureDatabase(dbFilePath: string, appRoot: string): void {
 
   const prismaDir = resolvePrismaDir(appRoot);
   const schemaPath = path.join(prismaDir, "schema.prisma");
-  if (!fs.existsSync(schemaPath)) {
-    console.error("[iKassir] prisma/schema.prisma not found at", schemaPath);
-    throw new Error("Database schema missing in application bundle");
-  }
-
   const templatePath = resolveTemplateDbPath();
 
   if (!fs.existsSync(dbFilePath)) {
@@ -87,10 +97,15 @@ export function ensureDatabase(dbFilePath: string, appRoot: string): void {
       console.error("[iKassir] Created database from template →", dbFilePath);
       return;
     }
-    runMigrateDeploy(dbFilePath, appRoot, prismaDir, schemaPath);
+    if (app.isPackaged) {
+      throw new Error(
+        "Install bundle incomplete (ikassir-template.db missing). Reinstall the application.",
+      );
+    }
+    runMigrateDeploy(dbFilePath, prismaDir, schemaPath);
     return;
   }
 
-  // Existing DB (e.g. after app update): apply pending migrations only.
-  runMigrateDeploy(dbFilePath, appRoot, prismaDir, schemaPath);
+  // Existing user DB (updates): apply pending migrations.
+  runMigrateDeploy(dbFilePath, prismaDir, schemaPath);
 }
