@@ -118,8 +118,8 @@ export function buildReceiptPrintHtml(p: ReceiptPrintPayload): string {
     font-family: Calibri, "Segoe UI", Arial, Helvetica, sans-serif;
     font-size: 12px;
     line-height: 1.35;
-    width: 72mm;
-    max-width: 72mm;
+    width: 68mm;
+    max-width: 68mm;
     margin: 0;
     padding: 0 0 3mm 0;
     color: #000;
@@ -218,8 +218,8 @@ export function buildReceiptPrintHtml(p: ReceiptPrintPayload): string {
   }
   @media print {
     body {
-      width: 72mm;
-      max-width: 72mm;
+      width: 68mm;
+      max-width: 68mm;
       font-size: 12px;
       padding: 0 0 3mm 0;
     }

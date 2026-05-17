@@ -90,7 +90,17 @@ export function registerIpcHandlers(prisma: PrismaClient): void {
         where: { key: "receipt_printer_name" },
       });
       const html = buildReceiptPrintHtml(body.data as ReceiptPrintPayload);
-      return printReceiptHtml(html, printerRow?.value);
+      return printReceiptHtml(html, printerRow?.value, true);
+    }
+
+    if (parsed.data.channel === "print.system") {
+      const body = printReceiptSchema.safeParse(parsed.data.payload);
+      if (!body.success) {
+        logPrint("Invalid print payload (system)", { issues: body.error.flatten() });
+        return { ok: false as const, error: "Invalid print payload", dialogFallback: false };
+      }
+      const html = buildReceiptPrintHtml(body.data as ReceiptPrintPayload);
+      return printReceiptHtml(html, undefined, false);
     }
 
     return dispatchIpc(prisma, parsed.data.channel, parsed.data.payload);

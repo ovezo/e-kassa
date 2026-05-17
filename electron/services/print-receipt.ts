@@ -5,8 +5,8 @@ import path from "path";
 import { logWindowsPrinterChecklist, summarizePrintersDetailed } from "./print-diagnostics";
 import { logPrint } from "./print-log";
 
-/** ~72mm printable width at 96 DPI — matches receipt CSS (inside 80mm paper). */
-const RECEIPT_WINDOW_WIDTH_PX = 272;
+/** ~68mm printable width at 96 DPI — matches receipt CSS (inside 80mm paper). */
+const RECEIPT_WINDOW_WIDTH_PX = 257;
 const RECEIPT_WINDOW_HEIGHT_PX = 1200;
 
 const THERMAL_WIDTH_MICRONS = 80_000;
@@ -125,20 +125,22 @@ async function trySilentPrint(
       silent: true,
       deviceName,
       printBackground: true,
-      margins: { marginType: "none" },
-      dpi: { horizontal: THERMAL_DPI, vertical: THERMAL_DPI },
-    },
-    {
-      silent: true,
-      deviceName,
-      printBackground: true,
+      color: false,
       margins: { marginType: "none" },
     },
     {
       silent: true,
       deviceName,
       printBackground: true,
-      margins: { marginType: "default" },
+      color: false,
+      margins: { marginType: "printableArea" },
+    },
+    {
+      silent: true,
+      deviceName,
+      printBackground: true,
+      color: false,
+      margins: { marginType: "none" },
       pageSize: { width: THERMAL_WIDTH_MICRONS, height: THERMAL_HEIGHT_MICRONS },
     },
   ];
@@ -192,13 +194,14 @@ async function loadReceiptHtml(win: BrowserWindow, html: string): Promise<string
 }
 
 export type PrintReceiptHtmlResult =
-  | { ok: true; mode: "silent" }
-  | { ok: false; error: string; dialogFallback: true };
+  | { ok: true; mode: "silent" | "system" }
+  | { ok: false; error: string; dialogFallback: boolean };
 
-/** Print HTML silently to the receipt printer; caller should open the print dialog on failure. */
+/** Print HTML to the receipt printer; caller should open the print dialog on failure if dialogFallback is true. */
 export function printReceiptHtml(
   html: string,
   preferredPrinterName?: string,
+  silent: boolean = true,
 ): Promise<PrintReceiptHtmlResult> {
   logPrint("Receipt print requested", {
     htmlLength: html.length,
@@ -250,6 +253,21 @@ export function printReceiptHtml(
         logPrint("Receipt rendered in print window", content);
         if (content.innerTextLength < 8) {
           logPrint("Warning: receipt body looks empty before print");
+        }
+
+        if (!silent) {
+          logPrint("Opening system print dialog");
+          win.webContents.print({ silent: false }, (success, failureReason) => {
+            cleanup();
+            if (success) {
+              logPrint("System print succeeded");
+              resolve({ ok: true, mode: "system" });
+            } else {
+              logPrint("System print failed or cancelled", { failureReason });
+              resolve({ ok: false, error: failureReason || "Print cancelled", dialogFallback: false });
+            }
+          });
+          return;
         }
 
         const printers = await win.webContents.getPrintersAsync();

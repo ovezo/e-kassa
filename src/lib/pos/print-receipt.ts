@@ -32,16 +32,31 @@ export async function printReceiptSilent(
 }
 
 /** Open the OS print dialog (pick any printer). Works in Electron and browser dev. */
-export function printReceiptSystemDialog(payload: ReceiptPrintPayload): PrintReceiptResult {
+export async function printReceiptSystemDialog(
+  payload: ReceiptPrintPayload,
+): Promise<PrintReceiptResult> {
   void logPrintEvent("Renderer: system print dialog requested", {
     orderType: payload.orderType,
     lineCount: payload.lines.length,
   });
+
+  if (typeof window !== "undefined" && window.ikassir) {
+    const res = await ikassirInvoke<ElectronPrintResult>("print.system", payload);
+    if (res.ok) {
+      void logPrintEvent("Renderer: system print dialog finished", { mode: res.mode });
+      return { ok: true };
+    }
+    void logPrintEvent("Renderer: system print dialog failed", { error: res.error });
+    return { ok: false, error: res.error ?? "Print failed" };
+  }
+
   const res = printReceiptInBrowser(payload);
   if (res.ok) {
-    void logPrintEvent("Renderer: system print dialog opened");
+    void logPrintEvent("Renderer: system print dialog opened (browser fallback)");
   } else {
-    void logPrintEvent("Renderer: system print dialog failed", { error: res.error });
+    void logPrintEvent("Renderer: system print dialog failed (browser fallback)", {
+      error: res.error,
+    });
   }
   return res;
 }

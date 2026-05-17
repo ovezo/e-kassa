@@ -236,13 +236,18 @@ export function OrderReceiptDialog({ orderId, onClose }: OrderReceiptDialogProps
     }
   }
 
-  function handleSystemPrint() {
+  async function handleSystemPrint() {
     const payload = buildPrintPayload();
     if (!payload || receiptVisibleLines.length === 0) return;
 
+    setPrintBusy(true);
     setError(null);
-    const res = printReceiptSystemDialog(payload);
-    if (!res.ok) setError(res.error ?? t("pos.order.receiptPrintFailed"));
+    try {
+      const res = await printReceiptSystemDialog(payload);
+      if (!res.ok) setError(res.error ?? t("pos.order.receiptPrintFailed"));
+    } finally {
+      setPrintBusy(false);
+    }
   }
 
   if (!orderId) return null;
