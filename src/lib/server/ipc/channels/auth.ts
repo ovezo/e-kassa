@@ -11,7 +11,7 @@ const loginSchema = z.object({
 
 const setupSchema = z.object({
   login: z.string().min(1).max(64),
-  password: z.string().min(6).max(128),
+  password: z.string().min(3).max(128),
   displayName: z.string().min(1).max(128),
 });
 

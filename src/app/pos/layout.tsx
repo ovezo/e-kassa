@@ -7,11 +7,13 @@ import { useEffect, useState } from "react";
 import { clearSession, readSession, type SessionUser } from "@/lib/session";
 import { LanguageSwitcher } from "@/components/LanguageSwitcher";
 import { useTranslations } from "@/lib/i18n/LocaleProvider";
+import { ChangePasswordModal } from "@/components/ChangePasswordModal";
 
 export default function PosLayout({ children }: { children: ReactNode }) {
   const router = useRouter();
   const pathname = usePathname();
   const [user, setUser] = useState<SessionUser | null>(null);
+  const [showChangePassword, setShowChangePassword] = useState(false);
   const t = useTranslations();
 
   useEffect(() => {
@@ -71,7 +73,13 @@ export default function PosLayout({ children }: { children: ReactNode }) {
             ) : null}
           </nav>
           <div className="ml-auto flex flex-wrap items-center justify-end gap-3">
-            <span className="text-sm text-stone-600">{user.displayName}</span>
+            <button
+              type="button"
+              onClick={() => setShowChangePassword(true)}
+              className="text-sm text-stone-600 hover:text-stone-900 underline decoration-stone-300 underline-offset-4"
+            >
+              {user.displayName}
+            </button>
             <LanguageSwitcher />
             <button
               type="button"
@@ -94,6 +102,19 @@ export default function PosLayout({ children }: { children: ReactNode }) {
           {children}
         </div>
       </main>
+
+      {showChangePassword && user && (
+        <ChangePasswordModal
+          userId={user.id}
+          actorId={user.id}
+          userName={user.displayName}
+          onClose={() => setShowChangePassword(false)}
+          onSuccess={() => {
+            setShowChangePassword(false);
+            alert("Password changed successfully");
+          }}
+        />
+      )}
     </div>
   );
 }

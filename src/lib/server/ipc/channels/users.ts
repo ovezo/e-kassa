@@ -8,7 +8,7 @@ const roleSchema = z.nativeEnum(Role);
 
 const createSchema = z.object({
   login: z.string().min(1).max(64),
-  password: z.string().min(6).max(128),
+  password: z.string().min(3).max(128),
   displayName: z.string().min(1).max(128),
   role: roleSchema,
   actorUserId: z.string().optional(),
@@ -19,7 +19,7 @@ const updateSchema = z.object({
   displayName: z.string().min(1).max(128).optional(),
   role: roleSchema.optional(),
   active: z.boolean().optional(),
-  password: z.string().min(6).max(128).optional(),
+  password: z.string().min(3).max(128).optional(),
   actorUserId: z.string().optional(),
 });
 

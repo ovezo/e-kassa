@@ -5,6 +5,8 @@ import { useCallback, useEffect, useState } from "react";
 import { Role } from "@prisma/client";
 import { ikassirInvoke } from "@/lib/electron-api";
 import { readSession } from "@/lib/session";
+import { ChangePasswordModal } from "@/components/ChangePasswordModal";
+import { NumberPad } from "@/components/NumberPad";
 
 type UserRow = {
   id: string;
@@ -27,6 +29,8 @@ export default function AdminUsersPage() {
   const [users, setUsers] = useState<UserRow[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [changingPasswordUser, setChangingPasswordUser] = useState<UserRow | null>(null);
+  const [showAddPasswordModal, setShowAddPasswordModal] = useState(false);
 
   const [form, setForm] = useState({
     login: "",
@@ -51,6 +55,10 @@ export default function AdminUsersPage() {
 
   async function createUser(e: React.FormEvent) {
     e.preventDefault();
+    if (form.password.length < 3) {
+      setError("Password must be at least 3 characters");
+      return;
+    }
     setBusy(true);
     setError(null);
     try {
@@ -136,18 +144,25 @@ export default function AdminUsersPage() {
             />
           </div>
           <div>
-            <label className="text-xs font-medium text-stone-600" htmlFor="nu-pass">
+            <label className="text-xs font-medium text-stone-600 mb-2 block">
               Password
             </label>
-            <input
-              id="nu-pass"
-              type="password"
-              className={input}
-              value={form.password}
-              onChange={(e) => setForm((f) => ({ ...f, password: e.target.value }))}
-              required
-              minLength={6}
-            />
+            <div className="flex items-center gap-3">
+              <input
+                type="password"
+                className={`${input} mt-0 flex-1`}
+                value={form.password}
+                onChange={(e) => setForm((f) => ({ ...f, password: e.target.value }))}
+                disabled={busy}
+              />
+              <button
+                type="button"
+                className={btn}
+                onClick={() => setShowAddPasswordModal(true)}
+              >
+                Numpad
+              </button>
+            </div>
           </div>
           <div>
             <label className="text-xs font-medium text-stone-600" htmlFor="nu-name">
@@ -211,7 +226,15 @@ export default function AdminUsersPage() {
                     {u.active ? "Yes" : "No"}
                   </span>
                 </td>
-                <td className="px-4 py-3 text-right">
+                <td className="px-4 py-3 text-right space-x-2">
+                  <button
+                    type="button"
+                    className={btn}
+                    disabled={busy}
+                    onClick={() => setChangingPasswordUser(u)}
+                  >
+                    Password
+                  </button>
                   <button
                     type="button"
                     className={btn}
@@ -219,7 +242,7 @@ export default function AdminUsersPage() {
                     onClick={() => void toggleActive(u)}
                   >
                     {u.active ? "Deactivate" : "Activate"}
-                  </button>{" "}
+                  </button>
                   <button
                     type="button"
                     className={`${btn} border-red-200 text-red-800 hover:bg-red-50`}
@@ -234,6 +257,62 @@ export default function AdminUsersPage() {
           </tbody>
         </table>
       </section>
+
+      {changingPasswordUser && (
+        <ChangePasswordModal
+          userId={changingPasswordUser.id}
+          actorId={actorId}
+          userName={changingPasswordUser.displayName}
+          onClose={() => setChangingPasswordUser(null)}
+          onSuccess={() => {
+            setChangingPasswordUser(null);
+            alert("Password changed successfully");
+          }}
+        />
+      )}
+
+      {showAddPasswordModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 backdrop-blur-sm">
+          <div className="w-full max-w-sm rounded-2xl bg-white p-6 shadow-xl">
+            <div className="mb-6 text-center">
+              <h2 className="text-xl font-semibold text-stone-800">Set Password</h2>
+              <p className="mt-1 text-sm text-stone-500">For new user</p>
+            </div>
+
+          <div className="mb-4">
+            <input
+              type="password"
+              className="w-full rounded-xl border border-stone-300 bg-white px-4 py-3 text-center text-lg tracking-widest outline-none focus:border-stone-400 focus:ring-2 focus:ring-stone-400/20"
+              value={form.password}
+              onChange={(e) => setForm((f) => ({ ...f, password: e.target.value }))}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") {
+                  e.preventDefault();
+                  setShowAddPasswordModal(false);
+                }
+              }}
+              autoFocus
+            />
+          </div>
+
+            <NumberPad
+              value={form.password}
+              onChange={(val) => setForm((f) => ({ ...f, password: val }))}
+              onSubmit={() => setShowAddPasswordModal(false)}
+            />
+
+            <div className="mt-6 text-center">
+              <button
+                type="button"
+                onClick={() => setShowAddPasswordModal(false)}
+                className="text-sm font-medium text-stone-600 hover:text-stone-900"
+              >
+                Close
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

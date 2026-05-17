@@ -7,6 +7,7 @@ import { ikassirInvoke } from "@/lib/electron-api";
 import { readSession, saveSession, type SessionUser } from "@/lib/session";
 import { LanguageSwitcher } from "@/components/LanguageSwitcher";
 import { useTranslations } from "@/lib/i18n/LocaleProvider";
+import { NumberPad } from "@/components/NumberPad";
 
 type Bootstrap = { needsSetup: boolean };
 
@@ -53,6 +54,10 @@ export default function SetupPage() {
 
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
+    if (password.length < 3) {
+      setError(t("setup.passwordLabel"));
+      return;
+    }
     setError(null);
     setBusy(true);
     try {
@@ -109,16 +114,28 @@ export default function SetupPage() {
             />
           </div>
           <div>
-            <label className="block text-xs font-medium text-stone-600" htmlFor="password">
+            <label className="block text-xs font-medium text-stone-600 mb-2">
               {t("setup.passwordLabel")}
             </label>
-            <input
-              id="password"
-              type="password"
-              autoComplete="new-password"
-              className="mt-1 w-full rounded-lg border border-stone-300 px-3 py-2 text-sm outline-none ring-stone-400 focus:ring-2"
+            <div className="mb-4">
+              <input
+                type="password"
+                className="w-full rounded-xl border border-stone-300 bg-white px-4 py-3 text-center text-lg tracking-widest outline-none focus:border-stone-400 focus:ring-2 focus:ring-stone-400/20"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") {
+                    e.preventDefault();
+                    onSubmit(e as unknown as React.FormEvent);
+                  }
+                }}
+                disabled={busy}
+              />
+            </div>
+            <NumberPad
               value={password}
-              onChange={(e) => setPassword(e.target.value)}
+              onChange={setPassword}
+              disabled={busy}
             />
           </div>
           {error ? (
