@@ -2,10 +2,11 @@ import { BrowserWindow, type PrinterInfo, type WebContentsPrintOptions } from "e
 import fs from "fs";
 import os from "os";
 import path from "path";
-import { logPrint, summarizePrinters } from "./print-log";
+import { logWindowsPrinterChecklist, summarizePrintersDetailed } from "./print-diagnostics";
+import { logPrint } from "./print-log";
 
-/** ~80mm at 96 DPI — match receipt CSS width so layout paints before print. */
-const RECEIPT_WINDOW_WIDTH_PX = 302;
+/** ~72mm printable width at 96 DPI — matches receipt CSS (inside 80mm paper). */
+const RECEIPT_WINDOW_WIDTH_PX = 272;
 const RECEIPT_WINDOW_HEIGHT_PX = 1200;
 
 const THERMAL_WIDTH_MICRONS = 80_000;
@@ -98,6 +99,7 @@ function printOnce(
     };
 
     const timer = setTimeout(() => {
+      logWindowsPrinterChecklist(deviceName);
       finish(
         false,
         `Print timed out after ${PRINT_CALLBACK_TIMEOUT_MS}ms (driver did not respond)`,
@@ -253,7 +255,7 @@ export function printReceiptHtml(
         const printers = await win.webContents.getPrintersAsync();
         logPrint("Printers enumerated", {
           count: printers.length,
-          printers: summarizePrinters(printers),
+          printers: summarizePrintersDetailed(printers),
         });
 
         const deviceName = pickReceiptPrinter(printers, preferredPrinterName);
@@ -289,7 +291,8 @@ export function printReceiptHtml(
         const error =
           failureReason ||
           `Could not print to ${deviceName}. Opening print dialog.`;
-        logPrint("Silent print failed; dialog fallback expected", {
+        logWindowsPrinterChecklist(deviceName);
+        logPrint("Silent print failed; use System button or fix driver", {
           deviceName,
           failureReason: failureReason || "(none)",
         });

@@ -95,17 +95,12 @@ export function buildReceiptPrintHtml(p: ReceiptPrintPayload): string {
       ? `<tr>${metaPair(p.labels.bellik, p.note)}<td colspan="2"></td></tr>`
       : "";
 
-  const showTableCustomer =
-    p.orderType === OrderType.TABLE && p.customerLabel.trim().length > 0;
+  const customerValue =
+    p.orderType === OrderType.TABLE ? p.customerLabel.trim() : "";
   const dateLabel = formatReceiptPrintDate(p.timestamp);
-  const metaCustomerRow = showTableCustomer
-    ? `<tr>
-      ${metaPair(p.labels.musderi, p.customerLabel)}
+  const metaCustomerRow = `<tr>
+      ${metaPair(p.labels.musderi, customerValue)}
       ${metaPair(p.labels.sene, dateLabel)}
-    </tr>`
-    : `<tr>
-      ${metaPair(p.labels.sene, dateLabel)}
-      <td colspan="2"></td>
     </tr>`;
 
   return `<!DOCTYPE html>
@@ -123,8 +118,8 @@ export function buildReceiptPrintHtml(p: ReceiptPrintPayload): string {
     font-family: Calibri, "Segoe UI", Arial, Helvetica, sans-serif;
     font-size: 12px;
     line-height: 1.35;
-    width: 80mm;
-    max-width: 80mm;
+    width: 72mm;
+    max-width: 72mm;
     margin: 0;
     padding: 0 0 3mm 0;
     color: #000;
@@ -155,6 +150,8 @@ export function buildReceiptPrintHtml(p: ReceiptPrintPayload): string {
   td.meta-label { white-space: nowrap; width: 18%; }
   td.meta-value { font-weight: bold; width: 32%; }
   table.items {
+    width: 100%;
+    max-width: 100%;
     border: 1px solid #000;
     margin: 0 0 6px 0;
     font-size: 12px;
@@ -182,7 +179,7 @@ export function buildReceiptPrintHtml(p: ReceiptPrintPayload): string {
   td.col-name,
   th.col-name {
     text-align: left;
-    width: 54%;
+    width: 48%;
     line-height: 1.1;
     word-break: break-word;
     overflow-wrap: anywhere;
@@ -193,20 +190,24 @@ export function buildReceiptPrintHtml(p: ReceiptPrintPayload): string {
     width: 8%;
     white-space: nowrap;
     line-height: 1.15;
+    font-size: 11px;
   }
   td.col-price,
   th.col-price {
     text-align: center;
-    width: 17%;
+    width: 20%;
     white-space: nowrap;
     line-height: 1.15;
+    font-size: 11px;
   }
   td.col-total,
   th.col-total {
     text-align: right;
-    width: 21%;
+    width: 24%;
     white-space: nowrap;
     line-height: 1.15;
+    font-size: 11px;
+    padding-right: 1px;
   }
   .footer {
     margin-top: 10px;
@@ -217,8 +218,8 @@ export function buildReceiptPrintHtml(p: ReceiptPrintPayload): string {
   }
   @media print {
     body {
-      width: 80mm;
-      max-width: 80mm;
+      width: 72mm;
+      max-width: 72mm;
       font-size: 12px;
       padding: 0 0 3mm 0;
     }
