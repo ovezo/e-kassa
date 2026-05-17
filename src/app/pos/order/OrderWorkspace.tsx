@@ -567,17 +567,13 @@ export function OrderWorkspace() {
     }
   }
 
-  async function handleSystemPrint() {
+  function handleSystemPrint() {
     const payload = buildPrintPayload();
     if (!payload || receiptVisibleLines.length === 0) return;
-    setPrintBusy(true);
+
     setError(null);
-    try {
-      const res = await printReceiptSystemDialog(payload);
-      if (!res.ok) setError(res.error ?? t("pos.order.receiptPrintFailed"));
-    } finally {
-      setPrintBusy(false);
-    }
+    const res = printReceiptSystemDialog(payload);
+    if (!res.ok) setError(res.error ?? t("pos.order.receiptPrintFailed"));
   }
 
   return (

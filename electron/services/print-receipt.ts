@@ -119,8 +119,20 @@ function printOnce(
 async function trySilentPrint(
   webContents: Electron.WebContents,
   deviceName: string,
+  contentHeightPx: number,
 ): Promise<{ success: boolean; failureReason?: string; attempt?: number }> {
+  // Convert pixels to microns (1px ≈ 264.5833 microns at 96 DPI)
+  const heightMicrons = Math.ceil(contentHeightPx * 264.5833);
+
   const attempts: WebContentsPrintOptions[] = [
+    {
+      silent: true,
+      deviceName,
+      printBackground: true,
+      color: false,
+      margins: { marginType: "none" },
+      pageSize: { width: THERMAL_WIDTH_MICRONS, height: heightMicrons },
+    },
     {
       silent: true,
       deviceName,
@@ -134,14 +146,6 @@ async function trySilentPrint(
       printBackground: true,
       color: false,
       margins: { marginType: "printableArea" },
-    },
-    {
-      silent: true,
-      deviceName,
-      printBackground: true,
-      color: false,
-      margins: { marginType: "none" },
-      pageSize: { width: THERMAL_WIDTH_MICRONS, height: THERMAL_HEIGHT_MICRONS },
     },
   ];
 
@@ -194,14 +198,13 @@ async function loadReceiptHtml(win: BrowserWindow, html: string): Promise<string
 }
 
 export type PrintReceiptHtmlResult =
-  | { ok: true; mode: "silent" | "system" }
+  | { ok: true; mode: "silent" }
   | { ok: false; error: string; dialogFallback: boolean };
 
-/** Print HTML to the receipt printer; caller should open the print dialog on failure if dialogFallback is true. */
+/** Print HTML silently to the receipt printer; caller should open the print dialog on failure. */
 export function printReceiptHtml(
   html: string,
   preferredPrinterName?: string,
-  silent: boolean = true,
 ): Promise<PrintReceiptHtmlResult> {
   logPrint("Receipt print requested", {
     htmlLength: html.length,
@@ -255,20 +258,9 @@ export function printReceiptHtml(
           logPrint("Warning: receipt body looks empty before print");
         }
 
-        if (!silent) {
-          logPrint("Opening system print dialog");
-          win.webContents.print({ silent: false }, (success, failureReason) => {
-            cleanup();
-            if (success) {
-              logPrint("System print succeeded");
-              resolve({ ok: true, mode: "system" });
-            } else {
-              logPrint("System print failed or cancelled", { failureReason });
-              resolve({ ok: false, error: failureReason || "Print cancelled", dialogFallback: false });
-            }
-          });
-          return;
-        }
+        // Resize the window to match the actual content height so Electron doesn't clip it
+        const contentHeight = Math.ceil(content.scrollHeight) + 20;
+        win.setContentSize(RECEIPT_WINDOW_WIDTH_PX, contentHeight);
 
         const printers = await win.webContents.getPrintersAsync();
         logPrint("Printers enumerated", {
@@ -294,6 +286,7 @@ export function printReceiptHtml(
         const { success, failureReason, attempt } = await trySilentPrint(
           win.webContents,
           deviceName,
+          contentHeight,
         );
 
         await delay(800);

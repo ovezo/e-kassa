@@ -109,10 +109,6 @@ export function buildReceiptPrintHtml(p: ReceiptPrintPayload): string {
 <meta charset="utf-8">
 <title>Receipt</title>
 <style>
-  @page {
-    size: 80mm auto;
-    margin: 0;
-  }
   * { box-sizing: border-box; }
   body {
     font-family: Calibri, "Segoe UI", Arial, Helvetica, sans-serif;
