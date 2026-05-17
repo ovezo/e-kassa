@@ -1,6 +1,7 @@
 import { ipcMain } from "electron";
 import { z } from "zod";
 import type { PrismaClient } from "@prisma/client";
+import { logPrint } from "../services/print-log";
 import { printReceiptHtml } from "../services/print-receipt";
 import { buildReceiptPrintHtml, type ReceiptPrintPayload } from "../../src/lib/pos/receipt-html";
 import { dispatchIpc } from "../../src/lib/server/ipc/index";
@@ -60,9 +61,23 @@ export function registerIpcHandlers(prisma: PrismaClient): void {
       throw new Error("Invalid IPC envelope");
     }
 
+    if (parsed.data.channel === "print.log") {
+      const body = z
+        .object({
+          message: z.string(),
+          detail: z.unknown().optional(),
+        })
+        .safeParse(parsed.data.payload);
+      if (body.success) logPrint(body.data.message, body.data.detail);
+      return { ok: true as const };
+    }
+
     if (parsed.data.channel === "print.receipt") {
       const body = printReceiptSchema.safeParse(parsed.data.payload);
-      if (!body.success) return { ok: false as const, error: "Invalid print payload" };
+      if (!body.success) {
+        logPrint("Invalid print payload", { issues: body.error.flatten() });
+        return { ok: false as const, error: "Invalid print payload", dialogFallback: true };
+      }
       const printerRow = await prisma.setting.findUnique({
         where: { key: "receipt_printer_name" },
       });

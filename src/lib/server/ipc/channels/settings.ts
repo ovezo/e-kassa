@@ -8,8 +8,8 @@ const DEFAULTS: Record<string, string> = {
   venue_name: "iKassir",
   venue_address: "",
   receipt_footer: "NOŞ BOLSUN !",
-  /** Optional; partial match. Empty = auto-detect name containing "Xprinter". */
-  receipt_printer_name: "",
+  /** Optional; partial match. Empty = auto-detect XP-Q80H / Xprinter. */
+  receipt_printer_name: "Q80",
 };
 
 export async function handleSettingsChannel(
