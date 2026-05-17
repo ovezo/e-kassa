@@ -1,16 +1,28 @@
 import { BrowserWindow, type PrinterInfo, type WebContentsPrintOptions } from "electron";
+import fs from "fs";
+import os from "os";
+import path from "path";
 import { logPrint, summarizePrinters } from "./print-log";
+
+/** ~80mm at 96 DPI — match receipt CSS width so layout paints before print. */
+const RECEIPT_WINDOW_WIDTH_PX = 302;
+const RECEIPT_WINDOW_HEIGHT_PX = 1200;
 
 const THERMAL_WIDTH_MICRONS = 80_000;
 const THERMAL_HEIGHT_MICRONS = 297_000;
+const THERMAL_DPI = 203;
 
 function printerScore(name: string): number {
   const n = name.toLowerCase();
   if (/xp[\s._-]*q80h/.test(n)) return 100;
-  if (/xp[\s._-]*q80/.test(n)) return 90;
-  if (/q80h/.test(n)) return 85;
-  if (/xprinter/.test(n)) return 80;
+  if (/xp[\s._-]*q80/.test(n)) return 95;
+  if (/q80h/.test(n)) return 90;
+  if (/xprinter/.test(n) && /80|q80/.test(n)) return 85;
+  if (/xprinter/.test(n)) return 75;
   if (/80mm/.test(n)) return 70;
+  // Generic 80C label driver — only if nothing better matched
+  if (/xp[\s._-]*80c/.test(n)) return 40;
+  if (/80c/.test(n)) return 35;
   return 0;
 }
 
@@ -28,7 +40,7 @@ export function pickReceiptPrinter(
     if (partial) return partial.name;
   }
 
-  let best: (typeof printers)[number] | undefined;
+  let best: PrinterInfo | undefined;
   let bestScore = 0;
   for (const p of printers) {
     const score = printerScore(p.name);
@@ -37,9 +49,19 @@ export function pickReceiptPrinter(
       best = p;
     }
   }
-  if (best) return best.name;
+  if (best && bestScore > 0) {
+    logPrint("Printer auto-selected by score", {
+      deviceName: best.name,
+      score: bestScore,
+    });
+    return best.name;
+  }
 
-  return printers.find((p) => p.isDefault)?.name;
+  const fallback = printers.find((p) => p.isDefault);
+  if (fallback) {
+    logPrint("Printer fallback to system default", { deviceName: fallback.name });
+  }
+  return fallback?.name;
 }
 
 function printOnce(
@@ -50,19 +72,19 @@ function printOnce(
 ): Promise<{ success: boolean; failureReason?: string }> {
   return new Promise((resolve) => {
     webContents.print(options, (success, failureReason) => {
-      if (!success) {
-        logPrint("Silent print attempt failed", {
-          attempt,
-          deviceName,
-          failureReason: failureReason || "(none)",
-          options: {
-            silent: options.silent,
-            printBackground: options.printBackground,
-            marginType: options.margins?.marginType,
-            pageSize: options.pageSize,
-          },
-        });
-      }
+      logPrint(success ? "Silent print attempt accepted by OS" : "Silent print attempt failed", {
+        attempt,
+        deviceName,
+        success,
+        failureReason: failureReason || "(none)",
+        options: {
+          silent: options.silent,
+          printBackground: options.printBackground,
+          marginType: options.margins?.marginType,
+          pageSize: options.pageSize,
+          dpi: options.dpi,
+        },
+      });
       resolve({ success, failureReason });
     });
   });
@@ -71,25 +93,27 @@ function printOnce(
 async function trySilentPrint(
   webContents: Electron.WebContents,
   deviceName: string,
-): Promise<{ success: boolean; failureReason?: string }> {
+): Promise<{ success: boolean; failureReason?: string; attempt?: number }> {
   const attempts: WebContentsPrintOptions[] = [
     {
       silent: true,
       deviceName,
-      printBackground: false,
+      printBackground: true,
       margins: { marginType: "none" },
-      pageSize: { width: THERMAL_WIDTH_MICRONS, height: THERMAL_HEIGHT_MICRONS },
-    },
-    {
-      silent: true,
-      deviceName,
-      printBackground: false,
-      margins: { marginType: "default" },
+      dpi: { horizontal: THERMAL_DPI, vertical: THERMAL_DPI },
     },
     {
       silent: true,
       deviceName,
       printBackground: true,
+      margins: { marginType: "none" },
+    },
+    {
+      silent: true,
+      deviceName,
+      printBackground: true,
+      margins: { marginType: "default" },
+      pageSize: { width: THERMAL_WIDTH_MICRONS, height: THERMAL_HEIGHT_MICRONS },
     },
   ];
 
@@ -101,10 +125,44 @@ async function trySilentPrint(
       i + 1,
       deviceName,
     );
-    if (success) return { success: true };
+    if (success) return { success: true, attempt: i + 1 };
     lastReason = failureReason;
   }
   return { success: false, failureReason: lastReason };
+}
+
+async function measureReceiptContent(webContents: Electron.WebContents): Promise<{
+  scrollHeight: number;
+  innerTextLength: number;
+}> {
+  try {
+    return await webContents.executeJavaScript(`({
+      scrollHeight: document.body ? document.body.scrollHeight : 0,
+      innerTextLength: document.body ? document.body.innerText.length : 0,
+    })`);
+  } catch {
+    return { scrollHeight: 0, innerTextLength: 0 };
+  }
+}
+
+function delay(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+async function loadReceiptHtml(win: BrowserWindow, html: string): Promise<string | null> {
+  const tmpPath = path.join(os.tmpdir(), `ikassir-receipt-${process.pid}-${Date.now()}.html`);
+  try {
+    fs.writeFileSync(tmpPath, html, "utf8");
+    await win.loadFile(tmpPath);
+    return tmpPath;
+  } catch (e) {
+    logPrint("loadFile failed, trying data URL", {
+      error: e instanceof Error ? e.message : String(e),
+    });
+    const dataUrl = `data:text/html;charset=utf-8,${encodeURIComponent(html)}`;
+    await win.loadURL(dataUrl);
+    return null;
+  }
 }
 
 export type PrintReceiptHtmlResult =
@@ -124,16 +182,26 @@ export function printReceiptHtml(
   return new Promise((resolve) => {
     const win = new BrowserWindow({
       show: false,
-      width: 320,
-      height: 600,
+      width: RECEIPT_WINDOW_WIDTH_PX,
+      height: RECEIPT_WINDOW_HEIGHT_PX,
       webPreferences: {
         nodeIntegration: false,
         contextIsolation: true,
-        sandbox: true,
+        sandbox: false,
       },
     });
 
+    let tmpPath: string | null = null;
+
     const cleanup = () => {
+      if (tmpPath) {
+        try {
+          fs.unlinkSync(tmpPath);
+        } catch {
+          // ignore
+        }
+        tmpPath = null;
+      }
       if (!win.isDestroyed()) win.destroy();
     };
 
@@ -147,67 +215,73 @@ export function printReceiptHtml(
       fail("Failed to load receipt HTML for printing", { code, desc });
     });
 
-    const dataUrl = `data:text/html;charset=utf-8,${encodeURIComponent(html)}`;
-    void win.loadURL(dataUrl).catch((e) => {
-      fail("Failed to load receipt URL for printing", {
-        error: e instanceof Error ? e.message : String(e),
-        dataUrlLength: dataUrl.length,
-      });
-    });
+    const run = async () => {
+      try {
+        tmpPath = await loadReceiptHtml(win, html);
+        await delay(400);
 
-    win.webContents.once("did-finish-load", () => {
-      const runPrint = async () => {
-        try {
-          const printers = await win.webContents.getPrintersAsync();
-          logPrint("Printers enumerated", {
-            count: printers.length,
-            printers: summarizePrinters(printers),
-          });
-
-          const deviceName = pickReceiptPrinter(printers, preferredPrinterName);
-
-          if (!deviceName) {
-            fail(
-              "Receipt printer not found (looked for XP-Q80H / Xprinter). Opening print dialog.",
-              { preferredPrinterName: preferredPrinterName?.trim() || null },
-            );
-            return;
-          }
-
-          logPrint("Using printer for silent print", {
-            deviceName,
-            preferredPrinterName: preferredPrinterName?.trim() || null,
-          });
-
-          const { success, failureReason } = await trySilentPrint(win.webContents, deviceName);
-          cleanup();
-          if (success) {
-            logPrint("Silent print succeeded", { deviceName });
-            resolve({ ok: true, mode: "silent" });
-            return;
-          }
-
-          const error =
-            failureReason ||
-            `Could not print to ${deviceName}. Opening print dialog.`;
-          logPrint("Silent print failed; dialog fallback expected", {
-            deviceName,
-            failureReason: failureReason || "(none)",
-          });
-          resolve({
-            ok: false,
-            error,
-            dialogFallback: true,
-          });
-        } catch (e) {
-          fail("Print threw an exception", {
-            error: e instanceof Error ? e.message : String(e),
-            stack: e instanceof Error ? e.stack : undefined,
-          });
+        const content = await measureReceiptContent(win.webContents);
+        logPrint("Receipt rendered in print window", content);
+        if (content.innerTextLength < 8) {
+          logPrint("Warning: receipt body looks empty before print");
         }
-      };
 
-      setTimeout(() => void runPrint(), 250);
-    });
+        const printers = await win.webContents.getPrintersAsync();
+        logPrint("Printers enumerated", {
+          count: printers.length,
+          printers: summarizePrinters(printers),
+        });
+
+        const deviceName = pickReceiptPrinter(printers, preferredPrinterName);
+
+        if (!deviceName) {
+          fail(
+            "Receipt printer not found (looked for XP-Q80H / Xprinter). Opening print dialog.",
+            { preferredPrinterName: preferredPrinterName?.trim() || null },
+          );
+          return;
+        }
+
+        logPrint("Using printer for silent print", {
+          deviceName,
+          preferredPrinterName: preferredPrinterName?.trim() || null,
+        });
+
+        const { success, failureReason, attempt } = await trySilentPrint(
+          win.webContents,
+          deviceName,
+        );
+
+        await delay(1500);
+
+        if (success) {
+          logPrint("Silent print job submitted", { deviceName, attempt });
+          cleanup();
+          resolve({ ok: true, mode: "silent" });
+          return;
+        }
+
+        cleanup();
+        const error =
+          failureReason ||
+          `Could not print to ${deviceName}. Opening print dialog.`;
+        logPrint("Silent print failed; dialog fallback expected", {
+          deviceName,
+          failureReason: failureReason || "(none)",
+        });
+        resolve({
+          ok: false,
+          error,
+          dialogFallback: true,
+        });
+      } catch (e) {
+        fail("Print threw an exception", {
+          error: e instanceof Error ? e.message : String(e),
+          stack: e instanceof Error ? e.stack : undefined,
+        });
+      }
+    };
+
+    void run();
   });
 }

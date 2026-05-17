@@ -9,7 +9,7 @@ const DEFAULTS: Record<string, string> = {
   venue_address: "",
   receipt_footer: "NOŞ BOLSUN !",
   /** Optional; partial match. Empty = auto-detect XP-Q80H / Xprinter. */
-  receipt_printer_name: "Q80",
+  receipt_printer_name: "Q80H",
 };
 
 export async function handleSettingsChannel(
