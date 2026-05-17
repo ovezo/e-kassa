@@ -11,13 +11,21 @@ const envelope = z.object({
   payload: z.unknown().optional(),
 });
 
+/** IPC may pass `Date` (structured clone); coerce to ISO string for print HTML. */
+const ipcTimestamp = z.preprocess((value) => {
+  if (value instanceof Date) return value.toISOString();
+  if (typeof value === "string") return value;
+  if (value == null) return "";
+  return String(value);
+}, z.string().min(1));
+
 const printReceiptSchema = z.object({
   venueName: z.string(),
   venueAddress: z.string(),
   cashierName: z.string(),
   customerLabel: z.string(),
   note: z.string(),
-  timestamp: z.string(),
+  timestamp: ipcTimestamp,
   orderType: z.enum(["TABLE", "TAKEAWAY_PICKUP", "TAKEAWAY_DELIVERY"]),
   lines: z.array(
     z.object({

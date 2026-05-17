@@ -116,84 +116,111 @@ export function buildReceiptPrintHtml(p: ReceiptPrintPayload): string {
 <style>
   @page {
     size: 80mm auto;
-    margin: 2mm;
+    margin: 0;
   }
   * { box-sizing: border-box; }
   body {
     font-family: Calibri, "Segoe UI", Arial, Helvetica, sans-serif;
-    font-size: 14px;
+    font-size: 12px;
     line-height: 1.35;
-    width: 76mm;
-    max-width: 76mm;
+    width: 80mm;
+    max-width: 80mm;
     margin: 0;
-    padding: 2mm 2mm 4mm;
+    padding: 0 0 3mm 0;
     color: #000;
+    overflow: visible;
     -webkit-print-color-adjust: exact;
     print-color-adjust: exact;
   }
   .center { text-align: center; }
   .venue {
-    font-size: 18px;
+    font-size: 15px;
     font-weight: bold;
     text-transform: uppercase;
-    margin: 0 0 4px;
+    margin: 0 0 3px;
     line-height: 1.2;
   }
   .address {
-    font-size: 14px;
-    margin: 0 0 8px;
+    font-size: 12px;
+    margin: 0 0 6px;
     line-height: 1.3;
   }
-  table { width: 100%; border-collapse: collapse; }
-  table.meta { margin-bottom: 8px; }
+  table { width: 100%; border-collapse: collapse; table-layout: fixed; }
+  table.meta { margin-bottom: 6px; }
   table.meta td {
     vertical-align: top;
-    padding: 2px 3px;
-    font-size: 14px;
+    padding: 0;
+    font-size: 12px;
   }
-  td.meta-label { white-space: nowrap; padding-right: 4px; width: 18%; }
+  td.meta-label { white-space: nowrap; width: 18%; }
   td.meta-value { font-weight: bold; width: 32%; }
   table.items {
-    border: 2px solid #000;
-    margin-bottom: 8px;
-    font-size: 14px;
+    border: 1px solid #000;
+    margin: 0 0 6px 0;
+    font-size: 12px;
   }
   table.items th,
   table.items td {
     border: 1px solid #000;
-    padding: 3px 4px;
+    padding: 0;
     vertical-align: top;
   }
   table.items th {
     font-weight: bold;
     text-align: center;
-    font-size: 14px;
-    line-height: 1.25;
+    font-size: 12px;
+    line-height: 1.15;
   }
   tr.summary-row td,
   tr:last-child td.col-name {
     font-weight: bold;
   }
   tr:last-child td.col-total {
-    font-size: 17px;
+    font-size: 15px;
     font-weight: bold;
   }
-  td.col-name { text-align: left; width: 46%; }
-  td.col-qty { text-align: center; width: 12%; }
-  td.col-price { text-align: center; width: 20%; }
-  td.col-total { text-align: right; width: 22%; white-space: nowrap; }
-  .footer {
-    margin-top: 12px;
+  td.col-name,
+  th.col-name {
+    text-align: left;
+    width: 54%;
+    line-height: 1.1;
+    word-break: break-word;
+    overflow-wrap: anywhere;
+  }
+  td.col-qty,
+  th.col-qty {
     text-align: center;
-    font-size: 18px;
+    width: 8%;
+    white-space: nowrap;
+    line-height: 1.15;
+  }
+  td.col-price,
+  th.col-price {
+    text-align: center;
+    width: 17%;
+    white-space: nowrap;
+    line-height: 1.15;
+  }
+  td.col-total,
+  th.col-total {
+    text-align: right;
+    width: 21%;
+    white-space: nowrap;
+    line-height: 1.15;
+  }
+  .footer {
+    margin-top: 10px;
+    text-align: center;
+    font-size: 15px;
     font-weight: bold;
     letter-spacing: 0.02em;
   }
   @media print {
     body {
-      width: 76mm;
-      max-width: 76mm;
-      font-size: 14px;
+      width: 80mm;
+      max-width: 80mm;
+      font-size: 12px;
+      padding: 0 0 3mm 0;
     }
   }
 </style>
@@ -214,10 +241,10 @@ export function buildReceiptPrintHtml(p: ReceiptPrintPayload): string {
   <table class="items">
     <thead>
       <tr>
-        <th>${escapeHtml(p.labels.colProduct)}</th>
-        <th>${escapeHtml(p.labels.colQty)}</th>
-        <th>${escapeHtml(p.labels.colPrice)}</th>
-        <th>${escapeHtml(p.labels.colTotal)}</th>
+        <th class="col-name">${escapeHtml(p.labels.colProduct)}</th>
+        <th class="col-qty">${escapeHtml(p.labels.colQty)}</th>
+        <th class="col-price">${escapeHtml(p.labels.colPrice)}</th>
+        <th class="col-total">${escapeHtml(p.labels.colTotal)}</th>
       </tr>
     </thead>
     <tbody>

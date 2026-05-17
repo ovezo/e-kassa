@@ -22,6 +22,12 @@ export function receiptPrintLabels(
   };
 }
 
+/** Normalize order time for print (IPC often sends a `Date` object). */
+export function toReceiptTimestamp(value: string | Date): string {
+  if (value instanceof Date) return value.toISOString();
+  return value;
+}
+
 /** Table label for dine-in print; empty for pickup/delivery. */
 export function receiptCustomerLabel(
   orderType: OrderType,
@@ -40,7 +46,7 @@ export function buildReceiptPrintPayload(input: {
   cashierName: string;
   customerLabel: string;
   note?: string;
-  timestamp: string;
+  timestamp: string | Date;
   orderType: OrderType;
   lines: ReceiptLine[];
   totals: ReceiptTotals;
@@ -53,7 +59,7 @@ export function buildReceiptPrintPayload(input: {
     cashierName: input.cashierName,
     customerLabel: input.customerLabel,
     note: input.note ?? "",
-    timestamp: input.timestamp,
+    timestamp: toReceiptTimestamp(input.timestamp),
     orderType: input.orderType,
     lines: input.lines,
     totals: input.totals,
