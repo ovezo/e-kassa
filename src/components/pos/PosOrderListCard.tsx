@@ -64,19 +64,29 @@ export function PosOrderListCard({
     : typeLabel(order.type);
 
   return (
-    <article className={`flex h-full min-h-[160px] w-full min-w-0 flex-col rounded-2xl border border-stone-200 shadow-sm ${isOpen ? "bg-white" : "bg-gray-100"}`}>
+    <article className={`relative flex h-full min-h-[160px] w-full min-w-0 flex-col rounded-2xl border border-stone-200 shadow-sm transition-colors hover:border-amber-300 ${isOpen ? "bg-white" : "bg-gray-100"}`}>
+      {isOpen ? (
+        <Link
+          href={`/pos/order?id=${order.id}`}
+          aria-label={orderAriaLabel}
+          className="absolute inset-0 z-10 rounded-2xl focus:outline-none focus:ring-2 focus:ring-amber-500 focus:ring-offset-2"
+        />
+      ) : (
+        <button
+          type="button"
+          onClick={onReceipt}
+          aria-label={t("pos.order.printReceiptFull")}
+          className="absolute inset-0 z-10 rounded-2xl focus:outline-none focus:ring-2 focus:ring-amber-500 focus:ring-offset-2"
+        />
+      )}
       <div className="flex min-w-0 flex-1 flex-col p-5 pb-2">
         <div className="flex items-start justify-between gap-2">
-          <Link
-            href={`/pos/order?id=${order.id}`}
-            aria-label={orderAriaLabel}
-            className="flex min-w-0 flex-1 items-center gap-2.5 text-stone-900 hover:text-amber-950"
-          >
+          <div className="flex min-w-0 flex-1 items-center gap-2.5 text-stone-900">
             <OrderTypeIcon type={order.type} className="h-5 w-5" />
             <span className="min-w-0 truncate text-lg font-semibold leading-snug">
               {order.type === OrderType.TABLE ? order.table?.label : typeLabel(order.type)}
             </span>
-          </Link>
+          </div>
           <div className="flex shrink-0 flex-wrap items-center justify-end gap-1.5">
             <span
               className={
@@ -98,7 +108,7 @@ export function PosOrderListCard({
         </div>
       </div>
 
-      <div className="mt-auto flex w-full min-w-0 items-stretch gap-2 border-t border-stone-100 p-4">
+      <div className="relative z-20 mt-auto flex w-full min-w-0 items-stretch gap-2 border-t border-stone-100 p-4">
         <button
           type="button"
           className={`${posBtnReceipt} min-w-0`}
