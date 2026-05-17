@@ -7,10 +7,12 @@ type ElectronPrintResult =
   | { ok: true; mode?: string }
   | { ok: false; error: string; dialogFallback?: boolean };
 
-/** Try silent XP-Q80H print in Electron; fall back to the system print dialog if that fails. */
-export async function printReceipt(payload: ReceiptPrintPayload): Promise<PrintReceiptResult> {
+/** Silent print to the configured thermal printer (Electron only). */
+export async function printReceiptSilent(
+  payload: ReceiptPrintPayload,
+): Promise<PrintReceiptResult> {
   if (typeof window !== "undefined" && window.ikassir) {
-    void logPrintEvent("Renderer: print requested", {
+    void logPrintEvent("Renderer: silent print requested", {
       orderType: payload.orderType,
       lineCount: payload.lines.length,
       totalTmt: payload.totals.totalTmt,
@@ -18,26 +20,33 @@ export async function printReceipt(payload: ReceiptPrintPayload): Promise<PrintR
 
     const res = await ikassirInvoke<ElectronPrintResult>("print.receipt", payload);
     if (res.ok) {
-      void logPrintEvent("Renderer: print finished via silent path");
+      void logPrintEvent("Renderer: silent print finished", { mode: res.mode });
       return { ok: true };
     }
 
-    void logPrintEvent("Renderer: silent print failed, opening print dialog", {
-      error: res.error,
-    });
-
-    const dialog = printReceiptInBrowser(payload);
-    if (dialog.ok) {
-      void logPrintEvent("Renderer: print dialog opened successfully");
-      return { ok: true };
-    }
-
-    void logPrintEvent("Renderer: print dialog path failed", { error: dialog.error });
-    return {
-      ok: false,
-      error: dialog.error ?? res.error ?? "Print failed",
-    };
+    void logPrintEvent("Renderer: silent print failed", { error: res.error });
+    return { ok: false, error: res.error ?? "Print failed" };
   }
 
   return printReceiptInBrowser(payload);
+}
+
+/** Open the OS print dialog (pick any printer). Works in Electron and browser dev. */
+export function printReceiptSystemDialog(payload: ReceiptPrintPayload): PrintReceiptResult {
+  void logPrintEvent("Renderer: system print dialog requested", {
+    orderType: payload.orderType,
+    lineCount: payload.lines.length,
+  });
+  const res = printReceiptInBrowser(payload);
+  if (res.ok) {
+    void logPrintEvent("Renderer: system print dialog opened");
+  } else {
+    void logPrintEvent("Renderer: system print dialog failed", { error: res.error });
+  }
+  return res;
+}
+
+/** @deprecated Use printReceiptSilent or printReceiptSystemDialog. */
+export async function printReceipt(payload: ReceiptPrintPayload): Promise<PrintReceiptResult> {
+  return printReceiptSilent(payload);
 }

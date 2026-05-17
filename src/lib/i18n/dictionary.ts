@@ -135,8 +135,10 @@ export const en: Record<string, string> = {
   "pos.order.receiptRestoreLine": "Restore on receipt",
   "pos.order.receiptReset": "Reset",
   "pos.order.receiptPrint": "Print",
+  "pos.order.receiptPrintSystem": "System",
   "pos.order.receiptPrinting": "Printing…",
   "pos.order.receiptPrintFailed": "Could not print receipt.",
+  "pos.order.receiptPrintTrySystem": "Try the System button.",
   "pos.order.receiptPrintElectronOnly": "Printing is only available in the desktop app.",
   "pos.order.receiptAllRemoved": "No items on receipt — use Reset or close.",
 
@@ -315,8 +317,10 @@ export const ru: Record<string, string> = {
   "pos.order.receiptRestoreLine": "Вернуть в чек",
   "pos.order.receiptReset": "Сбросить",
   "pos.order.receiptPrint": "Печать",
+  "pos.order.receiptPrintSystem": "Система",
   "pos.order.receiptPrinting": "Печать…",
   "pos.order.receiptPrintFailed": "Не удалось напечатать чек.",
+  "pos.order.receiptPrintTrySystem": "Нажмите «Система».",
   "pos.order.receiptPrintElectronOnly": "Печать доступна только в настольном приложении.",
   "pos.order.receiptAllRemoved": "Нет позиций в чеке — сбросьте или закройте.",
 

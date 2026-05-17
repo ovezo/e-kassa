@@ -64,6 +64,8 @@ export function pickReceiptPrinter(
   return fallback?.name;
 }
 
+const PRINT_CALLBACK_TIMEOUT_MS = 12_000;
+
 function printOnce(
   webContents: Electron.WebContents,
   options: WebContentsPrintOptions,
@@ -71,22 +73,44 @@ function printOnce(
   deviceName: string,
 ): Promise<{ success: boolean; failureReason?: string }> {
   return new Promise((resolve) => {
-    webContents.print(options, (success, failureReason) => {
-      logPrint(success ? "Silent print attempt accepted by OS" : "Silent print attempt failed", {
-        attempt,
-        deviceName,
-        success,
-        failureReason: failureReason || "(none)",
-        options: {
-          silent: options.silent,
-          printBackground: options.printBackground,
-          marginType: options.margins?.marginType,
-          pageSize: options.pageSize,
-          dpi: options.dpi,
+    let settled = false;
+    const finish = (success: boolean, failureReason?: string) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      logPrint(
+        success ? "Silent print attempt accepted by OS" : "Silent print attempt failed",
+        {
+          attempt,
+          deviceName,
+          success,
+          failureReason: failureReason || "(none)",
+          options: {
+            silent: options.silent,
+            printBackground: options.printBackground,
+            marginType: options.margins?.marginType,
+            pageSize: options.pageSize,
+            dpi: options.dpi,
+          },
         },
-      });
+      );
       resolve({ success, failureReason });
-    });
+    };
+
+    const timer = setTimeout(() => {
+      finish(
+        false,
+        `Print timed out after ${PRINT_CALLBACK_TIMEOUT_MS}ms (driver did not respond)`,
+      );
+    }, PRINT_CALLBACK_TIMEOUT_MS);
+
+    try {
+      webContents.print(options, (success, failureReason) => {
+        finish(success, failureReason);
+      });
+    } catch (e) {
+      finish(false, e instanceof Error ? e.message : String(e));
+    }
   });
 }
 
@@ -252,7 +276,7 @@ export function printReceiptHtml(
           deviceName,
         );
 
-        await delay(1500);
+        await delay(800);
 
         if (success) {
           logPrint("Silent print job submitted", { deviceName, attempt });

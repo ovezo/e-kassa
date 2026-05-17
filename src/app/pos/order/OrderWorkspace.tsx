@@ -16,7 +16,7 @@ import {
   type ReceiptLine,
   type ReceiptTotals,
 } from "@/lib/pos/receipt-print";
-import { printReceipt } from "@/lib/pos/print-receipt";
+import { printReceiptSilent, printReceiptSystemDialog } from "@/lib/pos/print-receipt";
 import { ServiceFeeRow } from "@/components/pos/ServiceFeeRow";
 import {
   buildReceiptPrintPayload,
@@ -554,13 +554,25 @@ export function OrderWorkspace() {
     setPrintBusy(true);
     setError(null);
     try {
-      const res = await printReceipt(payload);
-      if (!res.ok) setError(res.error ?? t("pos.order.receiptPrintFailed"));
+      const res = await printReceiptSilent(payload);
+      if (!res.ok) {
+        setError(
+          `${res.error ?? t("pos.order.receiptPrintFailed")} ${t("pos.order.receiptPrintTrySystem")}`,
+        );
+      }
     } catch (e) {
       setError(e instanceof Error ? e.message : t("pos.order.receiptPrintFailed"));
     } finally {
       setPrintBusy(false);
     }
+  }
+
+  function handleSystemPrint() {
+    const payload = buildPrintPayload();
+    if (!payload || receiptVisibleLines.length === 0) return;
+    setError(null);
+    const res = printReceiptSystemDialog(payload);
+    if (!res.ok) setError(res.error ?? t("pos.order.receiptPrintFailed"));
   }
 
   return (
@@ -831,7 +843,8 @@ export function OrderWorkspace() {
           onReset={
             printJob.editable && printJob.omittedLineIds.length > 0 ? resetReceiptLines : undefined
           }
-          onPrint={() => handlePrintReceipt()}
+          onPrint={() => void handlePrintReceipt()}
+          onSystemPrint={handleSystemPrint}
           printBusy={printBusy}
         >
           {printJob.editable ? (

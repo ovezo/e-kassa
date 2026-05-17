@@ -13,7 +13,7 @@ import {
   type ReceiptLine,
   type ReceiptTotals,
 } from "@/lib/pos/receipt-print";
-import { printReceipt } from "@/lib/pos/print-receipt";
+import { printReceiptSilent, printReceiptSystemDialog } from "@/lib/pos/print-receipt";
 import {
   buildReceiptPrintPayload,
   receiptCustomerLabel,
@@ -192,14 +192,13 @@ export function OrderReceiptDialog({ orderId, onClose }: OrderReceiptDialogProps
     onClose();
   }
 
-  async function handlePrintReceipt() {
-    if (!printJob || !order || !receiptDisplayTotals || receiptVisibleLines.length === 0) return;
-
+  function buildPrintPayload() {
+    if (!printJob || !order || !receiptDisplayTotals) return null;
     const session = readSession();
-    if (!session) return;
+    if (!session) return null;
     const labels = receiptPrintLabels(t);
     labels.footer = settings?.receipt_footer ?? labels.footer;
-    const payload = buildReceiptPrintPayload({
+    return buildReceiptPrintPayload({
       venueName,
       venueAddress: settings?.venue_address ?? "",
       cashierName: session.displayName,
@@ -215,17 +214,35 @@ export function OrderReceiptDialog({ orderId, onClose }: OrderReceiptDialogProps
       labels,
       servicePct,
     });
+  }
+
+  async function handlePrintReceipt() {
+    const payload = buildPrintPayload();
+    if (!payload || receiptVisibleLines.length === 0) return;
 
     setPrintBusy(true);
     setError(null);
     try {
-      const res = await printReceipt(payload);
-      if (!res.ok) setError(res.error ?? t("pos.order.receiptPrintFailed"));
+      const res = await printReceiptSilent(payload);
+      if (!res.ok) {
+        setError(
+          `${res.error ?? t("pos.order.receiptPrintFailed")} ${t("pos.order.receiptPrintTrySystem")}`,
+        );
+      }
     } catch (e) {
       setError(e instanceof Error ? e.message : t("pos.order.receiptPrintFailed"));
     } finally {
       setPrintBusy(false);
     }
+  }
+
+  function handleSystemPrint() {
+    const payload = buildPrintPayload();
+    if (!payload || receiptVisibleLines.length === 0) return;
+
+    setError(null);
+    const res = printReceiptSystemDialog(payload);
+    if (!res.ok) setError(res.error ?? t("pos.order.receiptPrintFailed"));
   }
 
   if (!orderId) return null;
@@ -254,7 +271,8 @@ export function OrderReceiptDialog({ orderId, onClose }: OrderReceiptDialogProps
       onReset={
         printJob.editable && printJob.omittedLineIds.length > 0 ? resetReceiptLines : undefined
       }
-      onPrint={() => handlePrintReceipt()}
+      onPrint={() => void handlePrintReceipt()}
+      onSystemPrint={handleSystemPrint}
       printBusy={printBusy}
     >
       {printJob.editable ? (

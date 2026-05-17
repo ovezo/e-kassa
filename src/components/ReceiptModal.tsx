@@ -11,8 +11,10 @@ type ReceiptModalProps = {
   children: ReactNode;
   /** Shown next to Close when the user removed lines from this receipt preview. */
   onReset?: () => void;
-  /** Footer Print button (open-order kitchen receipt). */
+  /** Direct / silent thermal print. */
   onPrint?: () => void;
+  /** OS print dialog (choose any printer). */
+  onSystemPrint?: () => void;
   printBusy?: boolean;
 };
 
@@ -23,6 +25,7 @@ export function ReceiptModal({
   children,
   onReset,
   onPrint,
+  onSystemPrint,
   printBusy = false,
 }: ReceiptModalProps) {
   const t = useTranslations();
@@ -37,6 +40,8 @@ export function ReceiptModal({
   }, [open, onClose]);
 
   if (!open) return null;
+
+  const showPrintFooter = onPrint || onSystemPrint;
 
   return (
     <div
@@ -82,16 +87,29 @@ export function ReceiptModal({
           </div>
         </div>
         <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain p-5">{children}</div>
-        {onPrint ? (
+        {showPrintFooter ? (
           <div className="shrink-0 border-t border-stone-200 bg-white p-4">
-            <button
-              type="button"
-              disabled={printBusy}
-              onClick={onPrint}
-              className="min-h-[52px] w-full touch-manipulation rounded-xl bg-stone-900 px-4 py-3 text-base font-semibold text-white hover:bg-stone-800 active:scale-[0.99] disabled:opacity-50"
-            >
-              {printBusy ? t("pos.order.receiptPrinting") : t("pos.order.receiptPrint")}
-            </button>
+            <div className="flex gap-2">
+              {onPrint ? (
+                <button
+                  type="button"
+                  disabled={printBusy}
+                  onClick={onPrint}
+                  className="min-h-[52px] min-w-0 flex-1 touch-manipulation rounded-xl bg-stone-900 px-4 py-3 text-base font-semibold text-white hover:bg-stone-800 active:scale-[0.99] disabled:opacity-50"
+                >
+                  {printBusy ? t("pos.order.receiptPrinting") : t("pos.order.receiptPrint")}
+                </button>
+              ) : null}
+              {onSystemPrint ? (
+                <button
+                  type="button"
+                  onClick={onSystemPrint}
+                  className="min-h-[52px] shrink-0 touch-manipulation rounded-xl border border-stone-300 bg-white px-4 py-3 text-base font-semibold text-stone-900 hover:bg-stone-50 active:scale-[0.99]"
+                >
+                  {t("pos.order.receiptPrintSystem")}
+                </button>
+              ) : null}
+            </div>
           </div>
         ) : null}
       </div>
