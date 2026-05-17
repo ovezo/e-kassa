@@ -6,6 +6,7 @@ import { formatBusinessDayRange } from "@/lib/business-day";
 export type DaySummaryData = {
   businessDayStart: string;
   businessDayEnd: string;
+  businessTimeZone?: string;
   venueName: string;
   orderCount: number;
   products: { productName: string; qty: number; totalTmt: number }[];
@@ -23,7 +24,12 @@ type DaySummaryReceiptViewProps = {
 export function DaySummaryReceiptView({ summary, t, locale }: DaySummaryReceiptViewProps) {
   const start = new Date(summary.businessDayStart);
   const end = new Date(summary.businessDayEnd);
-  const rangeLabel = formatBusinessDayRange(start, end, locale);
+  const rangeLabel = formatBusinessDayRange(
+    start,
+    end,
+    locale,
+    summary.businessTimeZone,
+  );
 
   return (
     <div className="mx-auto max-w-md text-center text-sm">

@@ -78,6 +78,7 @@ model Order {
   closedAt           DateTime?
   subtotalTmt        Float       @default(0)
   serviceFeeTmt      Float       @default(0)
+  serviceFeeWaived   Boolean     @default(false)
   deliveryFeeTmt     Float       @default(0)
   totalTmt           Float       @default(0)
   lines              OrderLine[]

@@ -27,6 +27,7 @@ export type PosOrderDetail = {
   }>;
   subtotalTmt: number;
   serviceFeeTmt: number;
+  serviceFeeWaived: boolean;
   deliveryFeeTmt: number;
   totalTmt: number;
 };

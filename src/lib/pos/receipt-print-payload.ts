@@ -22,15 +22,16 @@ export function receiptPrintLabels(
   };
 }
 
+/** Table label for dine-in print; empty for pickup/delivery. */
 export function receiptCustomerLabel(
   orderType: OrderType,
-  orderTypeLabel: string,
+  _orderTypeLabel: string,
   tableLabel: string | null,
 ): string {
   if (orderType === OrderType.TABLE && tableLabel) {
     return tableLabel;
   }
-  return orderTypeLabel;
+  return "";
 }
 
 export function buildReceiptPrintPayload(input: {

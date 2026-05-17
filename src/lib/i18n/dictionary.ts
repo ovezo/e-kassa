@@ -56,6 +56,7 @@ export const en: Record<string, string> = {
   "pos.table.subtitle": "Choose a table to open the order screen.",
   "pos.table.openTabs": "open tab(s)",
   "pos.table.available": "Available",
+  "pos.table.occupiedHint": "Use Open orders to continue this table",
   "pos.table.noTables": "No tables configured. Add tables in Admin → Catalog.",
 
   "pos.takeaway.title": "Take-away",
@@ -73,7 +74,8 @@ export const en: Record<string, string> = {
   "pos.open.linesMeta": "{count} line(s)",
 
   "pos.history.title": "Today",
-  "pos.history.subtitle": "Business day 6:00–6:00. Orders opened in this period (open and closed).",
+  "pos.history.subtitle":
+    "Business day 6:00–6:00. Orders opened since 6:00 today (venue time).",
   "pos.history.empty": "No orders yet today.",
   "pos.history.badgeOpen": "Open",
   "pos.history.badgeClosed": "Closed",
@@ -114,6 +116,8 @@ export const en: Record<string, string> = {
   "pos.order.qtyLabel": "Quantity:",
   "pos.order.subtotal": "Subtotal",
   "pos.order.service": "Service ({pct}%)",
+  "pos.order.serviceRemove": "Remove service fee",
+  "pos.order.serviceRestore": "Restore service fee",
   "pos.order.deliveryLine": "Delivery ({fee} TMT)",
   "pos.order.total": "Total",
   "pos.order.payClose": "Pay & Close",
@@ -231,6 +235,7 @@ export const ru: Record<string, string> = {
   "pos.table.subtitle": "Выберите стол, чтобы открыть заказ.",
   "pos.table.openTabs": "откр. счёт(ов)",
   "pos.table.available": "Свободен",
+  "pos.table.occupiedHint": "Откройте счёт в разделе «Открытые заказы»",
   "pos.table.noTables": "Столы не настроены. Добавьте столы в Админ → Каталог.",
 
   "pos.takeaway.title": "Навынос",
@@ -249,7 +254,8 @@ export const ru: Record<string, string> = {
   "pos.open.linesMeta": "{count} поз.",
 
   "pos.history.title": "Сегодня",
-  "pos.history.subtitle": "Рабочий день 6:00–6:00. Заказы, открытые в этом периоде.",
+  "pos.history.subtitle":
+    "Рабочий день 6:00–6:00. Заказы, открытые с 6:00 сегодня (время заведения).",
   "pos.history.empty": "Сегодня заказов пока нет.",
   "pos.history.badgeOpen": "Открыт",
   "pos.history.badgeClosed": "Закрыт",
@@ -290,6 +296,8 @@ export const ru: Record<string, string> = {
   "pos.order.qtyLabel": "Кол-во:",
   "pos.order.subtotal": "Подытог",
   "pos.order.service": "Сервис ({pct}%)",
+  "pos.order.serviceRemove": "Убрать сервисный сбор",
+  "pos.order.serviceRestore": "Вернуть сервисный сбор",
   "pos.order.deliveryLine": "Доставка ({fee} TMT)",
   "pos.order.total": "Итого",
   "pos.order.payClose": "Оплатить и закрыть",

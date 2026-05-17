@@ -16,7 +16,8 @@ import {
   type ReceiptLine,
   type ReceiptTotals,
 } from "@/lib/pos/receipt-print";
-import { printReceiptInBrowser } from "@/lib/pos/print-receipt-browser";
+import { printReceipt } from "@/lib/pos/print-receipt";
+import { ServiceFeeRow } from "@/components/pos/ServiceFeeRow";
 import {
   buildReceiptPrintPayload,
   receiptCustomerLabel,
@@ -56,6 +57,7 @@ type OrderDetail = {
   lines: OrderLine[];
   subtotalTmt: number;
   serviceFeeTmt: number;
+  serviceFeeWaived: boolean;
   deliveryFeeTmt: number;
   totalTmt: number;
   openedBy: { id: string; displayName: string };
@@ -343,8 +345,32 @@ export function OrderWorkspace() {
       fullDeliveryFeeTmt:
         viewOrder.deliveryFeeTmt || (Number.isFinite(deliveryRaw) ? deliveryRaw : 3),
       includeDelivery: true,
+      serviceFeeWaived: viewOrder.serviceFeeWaived,
     });
   }, [printJob, viewOrder, receiptVisibleLines, settings]);
+
+  async function toggleServiceFeeWaived() {
+    const oid = effectiveOrderId;
+    if (!oid || !session || !orderIsOpen || viewOrder?.type !== OrderType.TABLE) return;
+    setBusy(true);
+    setError(null);
+    try {
+      const res = await ikassirInvoke<{ ok: boolean; order?: OrderDetail; error?: string }>(
+        "orders.setServiceFeeWaived",
+        {
+          orderId: oid,
+          waived: !viewOrder.serviceFeeWaived,
+          actorUserId: session.id,
+        },
+      );
+      if (!res.ok || !res.order) setError(res.error ?? "Update failed");
+      else setOrder(res.order);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Failed");
+    } finally {
+      setBusy(false);
+    }
+  }
 
   async function addProduct(productId: string) {
     if (!session || !canAddFromMenu || !orderId) return;
@@ -522,14 +548,19 @@ export function OrderWorkspace() {
     });
   }
 
-  function handlePrintReceipt() {
+  async function handlePrintReceipt() {
     const payload = buildPrintPayload();
     if (!payload || receiptVisibleLines.length === 0) return;
     setPrintBusy(true);
     setError(null);
-    const res = printReceiptInBrowser(payload);
-    if (!res.ok) setError(res.error ?? t("pos.order.receiptPrintFailed"));
-    setPrintBusy(false);
+    try {
+      const res = await printReceipt(payload);
+      if (!res.ok) setError(res.error ?? t("pos.order.receiptPrintFailed"));
+    } catch (e) {
+      setError(e instanceof Error ? e.message : t("pos.order.receiptPrintFailed"));
+    } finally {
+      setPrintBusy(false);
+    }
   }
 
   return (
@@ -720,10 +751,15 @@ export function OrderWorkspace() {
                 </div>
               ) : null}
               {viewOrder.type === OrderType.TABLE ? (
-                <div className="flex justify-between text-stone-600">
-                  <dt>{t("pos.order.service", { pct: servicePct })}</dt>
-                  <dd className="font-medium text-stone-900">{formatTmt(viewOrder.serviceFeeTmt)}</dd>
-                </div>
+                <ServiceFeeRow
+                  servicePct={servicePct}
+                  serviceFeeTmt={viewOrder.serviceFeeTmt}
+                  waived={viewOrder.serviceFeeWaived}
+                  editable={orderIsOpen}
+                  toggleDisabled={busy}
+                  onToggle={() => void toggleServiceFeeWaived()}
+                  t={t}
+                />
               ) : null}
               {viewOrder.type === OrderType.TAKEAWAY_DELIVERY ? (
                 <div className="flex justify-between text-stone-600">
@@ -775,6 +811,7 @@ export function OrderWorkspace() {
                       serviceFeeTmt: order.serviceFeeTmt,
                       deliveryFeeTmt: order.deliveryFeeTmt,
                       totalTmt: order.totalTmt,
+                      serviceFeeWaived: order.serviceFeeWaived,
                     },
                   });
                 }}
@@ -811,6 +848,7 @@ export function OrderWorkspace() {
               servicePct={servicePct}
               deliveryFee={deliveryFee}
               onToggleLine={toggleLineOnReceipt}
+              onToggleServiceFee={() => void toggleServiceFeeWaived()}
               t={t}
             />
           ) : (

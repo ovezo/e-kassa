@@ -13,7 +13,7 @@ import {
   type ReceiptLine,
   type ReceiptTotals,
 } from "@/lib/pos/receipt-print";
-import { printReceiptInBrowser } from "@/lib/pos/print-receipt-browser";
+import { printReceipt } from "@/lib/pos/print-receipt";
 import {
   buildReceiptPrintPayload,
   receiptCustomerLabel,
@@ -108,6 +108,7 @@ export function OrderReceiptDialog({ orderId, onClose }: OrderReceiptDialogProps
                   serviceFeeTmt: orderRes.order.serviceFeeTmt,
                   deliveryFeeTmt: orderRes.order.deliveryFeeTmt,
                   totalTmt: orderRes.order.totalTmt,
+                  serviceFeeWaived: orderRes.order.serviceFeeWaived,
                 },
           });
         }
@@ -138,8 +139,38 @@ export function OrderReceiptDialog({ orderId, onClose }: OrderReceiptDialogProps
       fullDeliveryFeeTmt:
         order.deliveryFeeTmt || (Number.isFinite(deliveryRaw) ? deliveryRaw : 3),
       includeDelivery: true,
+      serviceFeeWaived: order.serviceFeeWaived,
     });
   }, [printJob, order, receiptVisibleLines, servicePct, deliveryFee]);
+
+  async function toggleServiceFeeWaived() {
+    if (!orderId || !order || order.status !== OrderStatus.OPEN || order.type !== OrderType.TABLE) {
+      return;
+    }
+    const session = readSession();
+    if (!session) return;
+    setError(null);
+    try {
+      const res = await ikassirInvoke<{ ok: boolean; order?: PosOrderDetail; error?: string }>(
+        "orders.setServiceFeeWaived",
+        {
+          orderId,
+          waived: !order.serviceFeeWaived,
+          actorUserId: session.id,
+        },
+      );
+      if (!res.ok || !res.order) {
+        setError(res.error ?? "Update failed");
+        return;
+      }
+      setOrder(res.order);
+      if (printJob?.editable) {
+        setPrintJob((j) => (j ? { ...j, totals: undefined } : j));
+      }
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Failed");
+    }
+  }
 
   function toggleLineOnReceipt(lineId: string) {
     setPrintJob((j) => {
@@ -161,7 +192,7 @@ export function OrderReceiptDialog({ orderId, onClose }: OrderReceiptDialogProps
     onClose();
   }
 
-  function handlePrintReceipt() {
+  async function handlePrintReceipt() {
     if (!printJob || !order || !receiptDisplayTotals || receiptVisibleLines.length === 0) return;
 
     const session = readSession();
@@ -187,9 +218,14 @@ export function OrderReceiptDialog({ orderId, onClose }: OrderReceiptDialogProps
 
     setPrintBusy(true);
     setError(null);
-    const res = printReceiptInBrowser(payload);
-    if (!res.ok) setError(res.error ?? t("pos.order.receiptPrintFailed"));
-    setPrintBusy(false);
+    try {
+      const res = await printReceipt(payload);
+      if (!res.ok) setError(res.error ?? t("pos.order.receiptPrintFailed"));
+    } catch (e) {
+      setError(e instanceof Error ? e.message : t("pos.order.receiptPrintFailed"));
+    } finally {
+      setPrintBusy(false);
+    }
   }
 
   if (!orderId) return null;
@@ -235,6 +271,7 @@ export function OrderReceiptDialog({ orderId, onClose }: OrderReceiptDialogProps
           servicePct={servicePct}
           deliveryFee={deliveryFee}
           onToggleLine={toggleLineOnReceipt}
+          onToggleServiceFee={() => void toggleServiceFeeWaived()}
           t={t}
         />
       ) : (

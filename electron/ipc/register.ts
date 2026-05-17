@@ -32,6 +32,7 @@ const printReceiptSchema = z.object({
     serviceFeeTmt: z.number(),
     deliveryFeeTmt: z.number(),
     totalTmt: z.number(),
+    serviceFeeWaived: z.boolean().optional(),
   }),
   labels: z.object({
     kassir: z.string(),
@@ -62,8 +63,11 @@ export function registerIpcHandlers(prisma: PrismaClient): void {
     if (parsed.data.channel === "print.receipt") {
       const body = printReceiptSchema.safeParse(parsed.data.payload);
       if (!body.success) return { ok: false as const, error: "Invalid print payload" };
+      const printerRow = await prisma.setting.findUnique({
+        where: { key: "receipt_printer_name" },
+      });
       const html = buildReceiptPrintHtml(body.data as ReceiptPrintPayload);
-      return printReceiptHtml(html);
+      return printReceiptHtml(html, printerRow?.value);
     }
 
     return dispatchIpc(prisma, parsed.data.channel, parsed.data.payload);

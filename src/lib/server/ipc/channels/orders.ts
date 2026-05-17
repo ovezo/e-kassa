@@ -41,7 +41,8 @@ async function recalcOrderTotals(prisma: PrismaClient, orderId: string): Promise
     const d = Number.parseFloat(settings.delivery_fee_tmt ?? "3");
     deliveryFeeTmt = round2(Number.isFinite(d) ? d : 3);
   }
-  const totalTmt = round2(subtotal + serviceFeeTmt + deliveryFeeTmt);
+  const serviceInTotal = order.serviceFeeWaived ? 0 : serviceFeeTmt;
+  const totalTmt = round2(subtotal + serviceInTotal + deliveryFeeTmt);
   await prisma.order.update({
     where: { id: orderId },
     data: { subtotalTmt: subtotal, serviceFeeTmt, deliveryFeeTmt, totalTmt },
@@ -93,6 +94,12 @@ const closeSchema = z.object({
   actorUserId: z.string().optional(),
 });
 
+const setServiceFeeWaivedSchema = z.object({
+  orderId: z.string(),
+  waived: z.boolean(),
+  actorUserId: z.string(),
+});
+
 const deleteOrderSchema = z.object({
   orderId: z.string(),
   actorUserId: z.string(),
@@ -130,6 +137,12 @@ export async function handleOrdersChannel(
           where: { id: tableId, active: true },
         });
         if (!table) return { ok: false as const, error: "Table not found" };
+        const openOnTable = await prisma.order.count({
+          where: { tableId, status: OrderStatus.OPEN, type: OrderType.TABLE },
+        });
+        if (openOnTable > 0) {
+          return { ok: false as const, error: "This table already has an open order" };
+        }
       } else if (tableId) {
         return { ok: false as const, error: "Take-away orders cannot have a table" };
       }
@@ -168,6 +181,12 @@ export async function handleOrdersChannel(
           where: { id: tableId, active: true },
         });
         if (!table) return { ok: false as const, error: "Table not found" };
+        const openOnTable = await prisma.order.count({
+          where: { tableId, status: OrderStatus.OPEN, type: OrderType.TABLE },
+        });
+        if (openOnTable > 0) {
+          return { ok: false as const, error: "This table already has an open order" };
+        }
       } else if (tableId) {
         return { ok: false as const, error: "Take-away orders cannot have a table" };
       }
@@ -257,11 +276,11 @@ export async function handleOrdersChannel(
     }
 
     case "orders.daySummary": {
-      const { start, end } = getBusinessDayRange();
+      const { start, end, timeZone } = getBusinessDayRange();
       const orders = await prisma.order.findMany({
         where: {
           status: OrderStatus.CLOSED,
-          closedAt: { gte: start, lt: end },
+          openedAt: { gte: start, lt: end },
         },
         include: { lines: true },
       });
@@ -275,7 +294,7 @@ export async function handleOrdersChannel(
 
       for (const o of orders) {
         dayTotal += o.totalTmt;
-        if (o.serviceFeeTmt > 0) {
+        if (o.serviceFeeTmt > 0 && !o.serviceFeeWaived) {
           serviceCount += 1;
           serviceTotal += o.serviceFeeTmt;
         }
@@ -300,6 +319,7 @@ export async function handleOrdersChannel(
       return {
         businessDayStart: start.toISOString(),
         businessDayEnd: end.toISOString(),
+        businessTimeZone: timeZone,
         venueName: venueRow?.value ?? "Coffee Shop",
         orderCount: orders.length,
         products,
@@ -432,6 +452,40 @@ export async function handleOrdersChannel(
       const updated = await prisma.order.findUnique({
         where: { id: orderId },
         include: orderInclude,
+      });
+      return { ok: true as const, order: updated };
+    }
+
+    case "orders.setServiceFeeWaived": {
+      const parsed = setServiceFeeWaivedSchema.safeParse(payload);
+      if (!parsed.success) return { ok: false as const, error: "Invalid input" };
+      const { orderId, waived, actorUserId } = parsed.data;
+
+      const order = await prisma.order.findUnique({ where: { id: orderId } });
+      if (!order) return { ok: false as const, error: "Order not found" };
+      if (order.status !== OrderStatus.OPEN) {
+        return { ok: false as const, error: "Order is closed" };
+      }
+      if (order.type !== OrderType.TABLE) {
+        return { ok: false as const, error: "Service fee applies to table orders only" };
+      }
+
+      await prisma.order.update({
+        where: { id: orderId },
+        data: { serviceFeeWaived: waived },
+      });
+      await recalcOrderTotals(prisma, orderId);
+      const updated = await prisma.order.findUnique({
+        where: { id: orderId },
+        include: orderInclude,
+      });
+      if (!updated) return { ok: false as const, error: "Order not found" };
+
+      await audit(prisma, {
+        userId: actorUserId,
+        action: waived ? "orders.service_fee_waived" : "orders.service_fee_restored",
+        entity: "Order",
+        payload: { orderId, waived },
       });
       return { ok: true as const, order: updated };
     }

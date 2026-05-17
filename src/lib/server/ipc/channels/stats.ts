@@ -12,7 +12,7 @@ export async function handleStatsChannel(
       const { start, end } = getBusinessDayRange();
       const whereClosedToday = {
         status: OrderStatus.CLOSED,
-        closedAt: { gte: start, lt: end },
+        openedAt: { gte: start, lt: end },
       } as const;
       const [closedOrdersToday, sumRow, openOrders] = await Promise.all([
         prisma.order.count({ where: whereClosedToday }),

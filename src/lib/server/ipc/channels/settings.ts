@@ -8,6 +8,8 @@ const DEFAULTS: Record<string, string> = {
   venue_name: "iKassir",
   venue_address: "",
   receipt_footer: "NOŞ BOLSUN !",
+  /** Optional; partial match. Empty = auto-detect name containing "Xprinter". */
+  receipt_printer_name: "",
 };
 
 export async function handleSettingsChannel(

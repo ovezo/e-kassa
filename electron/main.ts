@@ -187,6 +187,7 @@ async function ensureRendererBaseUrl(): Promise<string> {
       NODE_ENV: "production",
       NODE_PATH: standaloneModules,
       IKASSIR_PRODUCT_IMAGES_ROOT: imagesRoot,
+      IKASSIR_TIMEZONE: process.env.IKASSIR_TIMEZONE ?? "Asia/Ashgabat",
     },
     stdio: ["ignore", "pipe", "pipe"],
     windowsHide: true,

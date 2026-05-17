@@ -13,6 +13,8 @@ export type ReceiptTotals = {
   serviceFeeTmt: number;
   deliveryFeeTmt: number;
   totalTmt: number;
+  /** TABLE: service removed from bill but amount kept for display when closed. */
+  serviceFeeWaived?: boolean;
 };
 
 function roundMoney(n: number): number {
@@ -30,6 +32,7 @@ export function calcReceiptTotals(
     serviceFeePercent: number;
     fullDeliveryFeeTmt: number;
     includeDelivery: boolean;
+    serviceFeeWaived?: boolean;
   },
 ): ReceiptTotals {
   const subtotalTmt = roundMoney(lines.reduce((s, l) => s + l.lineTotalTmt, 0));
@@ -45,6 +48,14 @@ export function calcReceiptTotals(
     deliveryFeeTmt = roundMoney(options.fullDeliveryFeeTmt);
   }
 
-  const totalTmt = roundMoney(subtotalTmt + serviceFeeTmt + deliveryFeeTmt);
-  return { subtotalTmt, serviceFeeTmt, deliveryFeeTmt, totalTmt };
+  const waived = !!options.serviceFeeWaived;
+  const serviceInTotal = waived ? 0 : serviceFeeTmt;
+  const totalTmt = roundMoney(subtotalTmt + serviceInTotal + deliveryFeeTmt);
+  return {
+    subtotalTmt,
+    serviceFeeTmt,
+    deliveryFeeTmt,
+    totalTmt,
+    serviceFeeWaived: waived,
+  };
 }

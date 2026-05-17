@@ -6,7 +6,7 @@
   "scripts": {
     "postinstall": "prisma generate",
     "clean": "rm -rf .next out dist-electron",
-    "dev": "npm run build:electron && concurrently -k -n \"next,electron\" -c \"blue,magenta\" \"cross-env NODE_ENV=development next dev\" \"wait-on -t 120000 http-get://127.0.0.1:3000/ && echo '[iKassir] Starting Electron…' && cross-env NODE_ENV=development electron .\"",
+    "dev": "npm run build:electron && concurrently -k -n \"next,electron\" -c \"blue,magenta\" \"cross-env NODE_ENV=development IKASSIR_TIMEZONE=Asia/Ashgabat next dev\" \"wait-on -t 120000 http-get://127.0.0.1:3000/ && echo '[iKassir] Starting Electron…' && cross-env NODE_ENV=development electron .\"",
     "dev:electron": "npm run build:electron && cross-env NODE_ENV=development electron .",
     "dev:web": "next dev",
     "build:electron": "tsc -p electron/tsconfig.json",

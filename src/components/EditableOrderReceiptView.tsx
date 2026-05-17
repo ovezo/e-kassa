@@ -3,11 +3,8 @@
 import { OrderType } from "@prisma/client";
 import { formatTmt } from "@/lib/format-money";
 import type { ReceiptLine, ReceiptTotals } from "@/lib/pos/receipt-print";
-
-const lineStrikeBtn =
-  "flex h-9 w-9 shrink-0 touch-manipulation items-center justify-center rounded-lg border border-red-200 bg-red-50 text-lg font-bold leading-none text-red-800 hover:bg-red-100 active:scale-[0.98]";
-const lineRestoreBtn =
-  "flex h-9 w-9 shrink-0 touch-manipulation items-center justify-center rounded-lg border border-emerald-200 bg-emerald-50 text-lg font-bold leading-none text-emerald-900 hover:bg-emerald-100 active:scale-[0.98]";
+import { ServiceFeeRow } from "@/components/pos/ServiceFeeRow";
+import { ReceiptStrikeToggle } from "@/components/pos/receipt-strike-toggle";
 
 type EditableOrderReceiptViewProps = {
   venueName: string;
@@ -22,6 +19,7 @@ type EditableOrderReceiptViewProps = {
   servicePct: string;
   deliveryFee: string;
   onToggleLine: (lineId: string) => void;
+  onToggleServiceFee?: () => void;
   t: (key: string, params?: Record<string, string>) => string;
 };
 
@@ -38,6 +36,7 @@ export function EditableOrderReceiptView({
   servicePct,
   deliveryFee,
   onToggleLine,
+  onToggleServiceFee,
   t,
 }: EditableOrderReceiptViewProps) {
   const omittedSet = new Set(omittedLineIds);
@@ -65,16 +64,12 @@ export function EditableOrderReceiptView({
               key={l.id}
               className={`flex items-center gap-2 border-b border-stone-200 py-2 ${omitted ? "opacity-70" : ""}`}
             >
-              <button
-                type="button"
-                className={omitted ? lineRestoreBtn : lineStrikeBtn}
-                aria-label={
-                  omitted ? t("pos.order.receiptRestoreLine") : t("pos.order.receiptRemoveLine")
-                }
-                onClick={() => onToggleLine(l.id)}
-              >
-                {omitted ? "+" : "−"}
-              </button>
+              <ReceiptStrikeToggle
+                waived={omitted}
+                removeLabel={t("pos.order.receiptRemoveLine")}
+                restoreLabel={t("pos.order.receiptRestoreLine")}
+                onToggle={() => onToggleLine(l.id)}
+              />
               <div className="flex min-w-0 flex-1 items-start justify-between gap-2">
                 <span className={omitted ? "text-stone-500 line-through decoration-stone-400" : ""}>
                   {l.productName} ×{l.qty}
@@ -96,11 +91,15 @@ export function EditableOrderReceiptView({
             <dd className="font-medium text-stone-900">{formatTmt(totals.subtotalTmt)}</dd>
           </div>
         ) : null}
-        {orderType === OrderType.TABLE && totals.serviceFeeTmt > 0 ? (
-          <div className="flex justify-between text-stone-600">
-            <dt>{t("pos.order.service", { pct: servicePct })}</dt>
-            <dd className="font-medium text-stone-900">{formatTmt(totals.serviceFeeTmt)}</dd>
-          </div>
+        {orderType === OrderType.TABLE ? (
+          <ServiceFeeRow
+            servicePct={servicePct}
+            serviceFeeTmt={totals.serviceFeeTmt}
+            waived={!!totals.serviceFeeWaived}
+            editable={!!onToggleServiceFee}
+            onToggle={onToggleServiceFee}
+            t={t}
+          />
         ) : null}
         {orderType === OrderType.TAKEAWAY_DELIVERY && totals.deliveryFeeTmt > 0 ? (
           <div className="flex justify-between text-stone-600">

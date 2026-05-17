@@ -80,7 +80,11 @@ export function buildReceiptPrintHtml(p: ReceiptPrintPayload): string {
   if (p.orderType === OrderType.TAKEAWAY_DELIVERY) {
     feeRows.push(summaryRow(p.labels.eltipBerme, "", p.totals.deliveryFeeTmt));
   }
-  if (p.orderType === OrderType.TABLE) {
+  if (
+    p.orderType === OrderType.TABLE &&
+    p.totals.serviceFeeTmt > 0 &&
+    !p.totals.serviceFeeWaived
+  ) {
     feeRows.push(summaryRow(p.labels.hyzmat, `${p.servicePct}%`, p.totals.serviceFeeTmt));
   }
 
@@ -91,68 +95,87 @@ export function buildReceiptPrintHtml(p: ReceiptPrintPayload): string {
       ? `<tr>${metaPair(p.labels.bellik, p.note)}<td colspan="2"></td></tr>`
       : "";
 
+  const showTableCustomer =
+    p.orderType === OrderType.TABLE && p.customerLabel.trim().length > 0;
+  const dateLabel = formatReceiptPrintDate(p.timestamp);
+  const metaCustomerRow = showTableCustomer
+    ? `<tr>
+      ${metaPair(p.labels.musderi, p.customerLabel)}
+      ${metaPair(p.labels.sene, dateLabel)}
+    </tr>`
+    : `<tr>
+      ${metaPair(p.labels.sene, dateLabel)}
+      <td colspan="2"></td>
+    </tr>`;
+
   return `<!DOCTYPE html>
 <html lang="en">
 <head>
 <meta charset="utf-8">
 <title>Receipt</title>
 <style>
+  @page {
+    size: 80mm auto;
+    margin: 2mm;
+  }
   * { box-sizing: border-box; }
   body {
-    font-family: "Courier New", Courier, monospace;
-    font-size: 11px;
-    line-height: 1.3;
-    width: 72mm;
-    max-width: 72mm;
+    font-family: Calibri, "Segoe UI", Arial, Helvetica, sans-serif;
+    font-size: 14px;
+    line-height: 1.35;
+    width: 76mm;
+    max-width: 76mm;
     margin: 0;
     padding: 2mm 2mm 4mm;
     color: #000;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
   }
   .center { text-align: center; }
   .venue {
-    font-size: 14px;
+    font-size: 18px;
     font-weight: bold;
     text-transform: uppercase;
     margin: 0 0 4px;
     line-height: 1.2;
   }
   .address {
-    font-size: 11px;
+    font-size: 14px;
     margin: 0 0 8px;
-    line-height: 1.25;
+    line-height: 1.3;
   }
   table { width: 100%; border-collapse: collapse; }
   table.meta { margin-bottom: 8px; }
   table.meta td {
     vertical-align: top;
-    padding: 1px 2px;
-    font-size: 11px;
+    padding: 2px 3px;
+    font-size: 14px;
   }
-  td.meta-label { white-space: nowrap; padding-right: 2px; width: 18%; }
+  td.meta-label { white-space: nowrap; padding-right: 4px; width: 18%; }
   td.meta-value { font-weight: bold; width: 32%; }
   table.items {
-    border: 1px solid #000;
-    margin-bottom: 6px;
-    font-size: 10px;
+    border: 2px solid #000;
+    margin-bottom: 8px;
+    font-size: 14px;
   }
   table.items th,
   table.items td {
     border: 1px solid #000;
-    padding: 2px 3px;
+    padding: 3px 4px;
     vertical-align: top;
   }
   table.items th {
     font-weight: bold;
     text-align: center;
-    font-size: 9px;
-    line-height: 1.15;
+    font-size: 14px;
+    line-height: 1.25;
   }
   tr.summary-row td,
   tr:last-child td.col-name {
     font-weight: bold;
   }
   tr:last-child td.col-total {
-    font-size: 12px;
+    font-size: 17px;
     font-weight: bold;
   }
   td.col-name { text-align: left; width: 46%; }
@@ -162,9 +185,16 @@ export function buildReceiptPrintHtml(p: ReceiptPrintPayload): string {
   .footer {
     margin-top: 12px;
     text-align: center;
-    font-size: 16px;
+    font-size: 18px;
     font-weight: bold;
     letter-spacing: 0.02em;
+  }
+  @media print {
+    body {
+      width: 76mm;
+      max-width: 76mm;
+      font-size: 14px;
+    }
   }
 </style>
 </head>
@@ -177,10 +207,7 @@ export function buildReceiptPrintHtml(p: ReceiptPrintPayload): string {
       ${metaPair(p.labels.kassir, p.cashierName)}
       ${metaPair(p.labels.wagt, formatReceiptPrintTime(p.timestamp))}
     </tr>
-    <tr>
-      ${metaPair(p.labels.musderi, p.customerLabel)}
-      ${metaPair(p.labels.sene, formatReceiptPrintDate(p.timestamp))}
-    </tr>
+    ${metaCustomerRow}
     ${bellikRow}
   </table>
 
