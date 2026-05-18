@@ -5,67 +5,89 @@ import path from "path";
 import { logWindowsPrinterChecklist, summarizePrintersDetailed } from "./print-diagnostics";
 import { logPrint } from "./print-log";
 
-/** ~76mm printable width at 96 DPI — matches receipt CSS (inside 80mm paper). */
-const RECEIPT_WINDOW_WIDTH_PX = 287;
-const RECEIPT_WINDOW_HEIGHT_PX = 1200;
+/**
+ * 80mm thermal printer width
+ * XP-80C / XP-Q80H printable width at 203 DPI
+ */
+const RECEIPT_WINDOW_WIDTH_PX = 576;
+const RECEIPT_WINDOW_HEIGHT_PX = 1600;
 
-const THERMAL_WIDTH_MICRONS = 80_000;
-const THERMAL_HEIGHT_MICRONS = 297_000;
 const THERMAL_DPI = 203;
 
 function printerScore(name: string): number {
   const n = name.toLowerCase();
+
   if (/xp[\s._-]*q80h/.test(n)) return 100;
   if (/xp[\s._-]*q80/.test(n)) return 95;
   if (/q80h/.test(n)) return 90;
+
   if (/xprinter/.test(n) && /80|q80/.test(n)) return 85;
   if (/xprinter/.test(n)) return 75;
+
   if (/80mm/.test(n)) return 70;
-  // Generic 80C label driver — only if nothing better matched
+
   if (/xp[\s._-]*80c/.test(n)) return 40;
   if (/80c/.test(n)) return 35;
+
   return 0;
 }
 
-/** Prefer XP-Q80H / Xprinter 80mm; optional `preferred` overrides via settings (partial match). */
+/** Prefer XP-Q80H / Xprinter 80mm; optional preferred override */
 export function pickReceiptPrinter(
   printers: PrinterInfo[],
   preferred?: string,
 ): string | undefined {
   const pref = preferred?.trim();
+
   if (pref) {
     const lower = pref.toLowerCase();
-    const exact = printers.find((p) => p.name.toLowerCase() === lower);
+
+    const exact = printers.find(
+      (p) => p.name.toLowerCase() === lower,
+    );
+
     if (exact) return exact.name;
-    const partial = printers.find((p) => p.name.toLowerCase().includes(lower));
+
+    const partial = printers.find(
+      (p) => p.name.toLowerCase().includes(lower),
+    );
+
     if (partial) return partial.name;
   }
 
   let best: PrinterInfo | undefined;
   let bestScore = 0;
+
   for (const p of printers) {
     const score = printerScore(p.name);
+
     if (score > bestScore) {
       bestScore = score;
       best = p;
     }
   }
+
   if (best && bestScore > 0) {
     logPrint("Printer auto-selected by score", {
       deviceName: best.name,
       score: bestScore,
     });
+
     return best.name;
   }
 
   const fallback = printers.find((p) => p.isDefault);
+
   if (fallback) {
-    logPrint("Printer fallback to system default", { deviceName: fallback.name });
+    logPrint("Printer fallback to system default", {
+      deviceName: fallback.name,
+    });
   }
+
   return fallback?.name;
 }
 
-const PRINT_CALLBACK_TIMEOUT_MS = 12_000;
+const PRINT_CALLBACK_TIMEOUT_MS = 12000;
 
 function printOnce(
   webContents: Electron.WebContents,
@@ -75,12 +97,21 @@ function printOnce(
 ): Promise<{ success: boolean; failureReason?: string }> {
   return new Promise((resolve) => {
     let settled = false;
-    const finish = (success: boolean, failureReason?: string) => {
+
+    const finish = (
+      success: boolean,
+      failureReason?: string,
+    ) => {
       if (settled) return;
+
       settled = true;
+
       clearTimeout(timer);
+
       logPrint(
-        success ? "Silent print attempt accepted by OS" : "Silent print attempt failed",
+        success
+          ? "Silent print attempt accepted by OS"
+          : "Silent print attempt failed",
         {
           attempt,
           deviceName,
@@ -90,28 +121,35 @@ function printOnce(
             silent: options.silent,
             printBackground: options.printBackground,
             marginType: options.margins?.marginType,
-            pageSize: options.pageSize,
             dpi: options.dpi,
           },
         },
       );
+
       resolve({ success, failureReason });
     };
 
     const timer = setTimeout(() => {
       logWindowsPrinterChecklist(deviceName);
+
       finish(
         false,
-        `Print timed out after ${PRINT_CALLBACK_TIMEOUT_MS}ms (driver did not respond)`,
+        `Print timed out after ${PRINT_CALLBACK_TIMEOUT_MS}ms`,
       );
     }, PRINT_CALLBACK_TIMEOUT_MS);
 
     try {
-      webContents.print(options, (success, failureReason) => {
-        finish(success, failureReason);
-      });
+      webContents.print(
+        options,
+        (success, failureReason) => {
+          finish(success, failureReason);
+        },
+      );
     } catch (e) {
-      finish(false, e instanceof Error ? e.message : String(e));
+      finish(
+        false,
+        e instanceof Error ? e.message : String(e),
+      );
     }
   });
 }
@@ -119,122 +157,254 @@ function printOnce(
 async function trySilentPrint(
   webContents: Electron.WebContents,
   deviceName: string,
-  contentHeightPx: number,
-): Promise<{ success: boolean; failureReason?: string; attempt?: number }> {
-  // Convert pixels to microns (1px ≈ 264.5833 microns at 96 DPI)
-  const heightMicrons = Math.ceil(contentHeightPx * 264.5833);
-
+): Promise<{
+  success: boolean;
+  failureReason?: string;
+  attempt?: number;
+}> {
   const attempts: WebContentsPrintOptions[] = [
     {
       silent: true,
       deviceName,
+
       printBackground: true,
       color: false,
-      margins: { marginType: "none" },
-      pageSize: { width: THERMAL_WIDTH_MICRONS, height: heightMicrons },
-      dpi: { horizontal: THERMAL_DPI, vertical: THERMAL_DPI },
-    },
-    {
-      silent: true,
-      deviceName,
-      printBackground: true,
-      color: false,
-      margins: { marginType: "none" },
-      pageSize: { width: THERMAL_WIDTH_MICRONS, height: heightMicrons },
-      dpi: { horizontal: THERMAL_DPI, vertical: THERMAL_DPI },
+
+      margins: {
+        marginType: "none",
+      },
+
+      pageSize: {
+        width: 80000,
+        height: 200000,
+      },
+
+      dpi: {
+        horizontal: THERMAL_DPI,
+        vertical: THERMAL_DPI,
+      },
+
       scaleFactor: 100,
     },
+
     {
       silent: true,
       deviceName,
+
       printBackground: true,
       color: false,
-      margins: { marginType: "none" },
-      dpi: { horizontal: THERMAL_DPI, vertical: THERMAL_DPI },
+
+      margins: {
+        marginType: "printableArea",
+      },
+
+      pageSize: {
+        width: 80000,
+        height: 200000,
+      },
+
+      dpi: {
+        horizontal: THERMAL_DPI,
+        vertical: THERMAL_DPI,
+      },
+
+      scaleFactor: 100,
     },
+
     {
       silent: true,
       deviceName,
+
       printBackground: true,
       color: false,
-      margins: { marginType: "printableArea" },
-      dpi: { horizontal: THERMAL_DPI, vertical: THERMAL_DPI },
+
+      pageSize: {
+        width: 80000,
+        height: 200000,
+      },
+
+      scaleFactor: 100,
     },
   ];
 
   let lastReason: string | undefined;
+
   for (let i = 0; i < attempts.length; i++) {
-    const { success, failureReason } = await printOnce(
-      webContents,
-      attempts[i]!,
-      i + 1,
-      deviceName,
-    );
-    if (success) return { success: true, attempt: i + 1 };
+    logPrint("Print attempt starting", {
+      attempt: i + 1,
+      options: attempts[i],
+    });
+
+    const { success, failureReason } =
+      await printOnce(
+        webContents,
+        attempts[i]!,
+        i + 1,
+        deviceName,
+      );
+
+    if (success) {
+      return {
+        success: true,
+        attempt: i + 1,
+      };
+    }
+
     lastReason = failureReason;
   }
-  return { success: false, failureReason: lastReason };
+
+  return {
+    success: false,
+    failureReason: lastReason,
+  };
 }
 
-async function measureReceiptContent(webContents: Electron.WebContents): Promise<{
+async function measureReceiptContent(
+  webContents: Electron.WebContents,
+): Promise<{
   scrollHeight: number;
   innerTextLength: number;
 }> {
   try {
-    return await webContents.executeJavaScript(`({
-      scrollHeight: document.body ? document.body.scrollHeight : 0,
-      innerTextLength: document.body ? document.body.innerText.length : 0,
-    })`);
+    return await webContents.executeJavaScript(`
+      ({
+        scrollHeight: document.body
+          ? document.body.scrollHeight
+          : 0,
+
+        innerTextLength: document.body
+          ? document.body.innerText.length
+          : 0
+      })
+    `);
   } catch {
-    return { scrollHeight: 0, innerTextLength: 0 };
+    return {
+      scrollHeight: 0,
+      innerTextLength: 0,
+    };
   }
 }
 
 function delay(ms: number): Promise<void> {
-  return new Promise((resolve) => setTimeout(resolve, ms));
+  return new Promise((resolve) => {
+    setTimeout(resolve, ms);
+  });
 }
 
-async function loadReceiptHtml(win: BrowserWindow, html: string): Promise<string | null> {
-  const tmpPath = path.join(os.tmpdir(), `unikassa-receipt-${process.pid}-${Date.now()}.html`);
+async function loadReceiptHtml(
+  win: BrowserWindow,
+  html: string,
+): Promise<string | null> {
+  const tmpPath = path.join(
+    os.tmpdir(),
+    `unikassa-receipt-${process.pid}-${Date.now()}.html`,
+  );
+
   try {
     fs.writeFileSync(tmpPath, html, "utf8");
+
     await win.loadFile(tmpPath);
+
     return tmpPath;
   } catch (e) {
     logPrint("loadFile failed, trying data URL", {
-      error: e instanceof Error ? e.message : String(e),
+      error:
+        e instanceof Error
+          ? e.message
+          : String(e),
     });
-    const dataUrl = `data:text/html;charset=utf-8,${encodeURIComponent(html)}`;
+
+    const dataUrl = `data:text/html;charset=utf-8,${encodeURIComponent(
+      html,
+    )}`;
+
     await win.loadURL(dataUrl);
+
     return null;
   }
 }
 
 export type PrintReceiptHtmlResult =
-  | { ok: true; mode: "silent" }
-  | { ok: false; error: string; dialogFallback: boolean };
+  | {
+      ok: true;
+      mode: "silent";
+    }
+  | {
+      ok: false;
+      error: string;
+      dialogFallback: boolean;
+    };
 
-/** Print HTML silently to the receipt printer; caller should open the print dialog on failure. */
+/** Silent thermal printing */
 export function printReceiptHtml(
   html: string,
   preferredPrinterName?: string,
 ): Promise<PrintReceiptHtmlResult> {
   logPrint("Receipt print requested", {
     htmlLength: html.length,
-    preferredPrinterName: preferredPrinterName?.trim() || "(auto)",
+    preferredPrinterName:
+      preferredPrinterName?.trim() || "(auto)",
   });
 
   return new Promise((resolve) => {
     const win = new BrowserWindow({
       show: false,
+
       width: RECEIPT_WINDOW_WIDTH_PX,
       height: RECEIPT_WINDOW_HEIGHT_PX,
+
+      backgroundColor: "#ffffff",
+
       webPreferences: {
         nodeIntegration: false,
         contextIsolation: true,
         sandbox: false,
-        offscreen: false,
       },
+    });
+
+    /* =========================
+       DEBUG WEB CONTENTS EVENTS
+       ========================= */
+
+    win.webContents.on("did-start-loading", () => {
+      logPrint("did-start-loading");
+    });
+
+    win.webContents.on("dom-ready", () => {
+      logPrint("dom-ready");
+    });
+
+    win.webContents.on("did-stop-loading", () => {
+      logPrint("did-stop-loading");
+    });
+
+    win.webContents.on("did-finish-load", () => {
+      logPrint("did-finish-load");
+    });
+
+    win.webContents.on(
+      "did-fail-load",
+      (_e, code, desc) => {
+        logPrint("did-fail-load", {
+          code,
+          desc,
+        });
+      },
+    );
+
+    win.webContents.on(
+      "render-process-gone",
+      (_e, details) => {
+        logPrint("render-process-gone", details);
+      },
+    );
+
+    win.webContents.on("unresponsive", () => {
+      logPrint("webContents unresponsive");
+    });
+
+    win.webContents.on("responsive", () => {
+      logPrint("webContents responsive");
     });
 
     let tmpPath: string | null = null;
@@ -244,96 +414,169 @@ export function printReceiptHtml(
         try {
           fs.unlinkSync(tmpPath);
         } catch {
-          // ignore
+          //
         }
+
         tmpPath = null;
       }
-      if (!win.isDestroyed()) win.destroy();
+
+      if (!win.isDestroyed()) {
+        win.destroy();
+      }
     };
 
-    const fail = (error: string, detail?: unknown) => {
+    const fail = (
+      error: string,
+      detail?: unknown,
+    ) => {
       logPrint(error, detail);
-      cleanup();
-      resolve({ ok: false, error, dialogFallback: true });
-    };
 
-    win.webContents.once("did-fail-load", (_event, code, desc) => {
-      fail("Failed to load receipt HTML for printing", { code, desc });
-    });
+      cleanup();
+
+      resolve({
+        ok: false,
+        error,
+        dialogFallback: true,
+      });
+    };
 
     const run = async () => {
       try {
+        logPrint("About to load receipt HTML");
+
         tmpPath = await loadReceiptHtml(win, html);
-        
-        // Wait for the page to finish rendering before measuring
-        await new Promise<void>((resolve) => {
-          win.webContents.once("did-finish-load", () => {
-            // Additional delay to ensure CSS and layout are fully applied
-            setTimeout(() => resolve(), 600);
+
+        logPrint("loadReceiptHtml completed", {
+          tmpPath,
+          currentURL: win.webContents.getURL(),
+        });
+
+        logPrint("Waiting for render stabilization");
+
+        await delay(1200);
+
+        logPrint("Render stabilization completed");
+
+        logPrint(
+          "About to execute layout stabilization script",
+        );
+
+        await win.webContents.executeJavaScript(`
+          new Promise((resolve) => {
+            requestAnimationFrame(() => {
+              requestAnimationFrame(resolve);
+            });
           });
-        });
+        `);
 
-        const content = await measureReceiptContent(win.webContents);
-        logPrint("Receipt rendered in print window", content);
-        if (content.innerTextLength < 8) {
-          logPrint("Warning: receipt body looks empty before print");
-        }
+        logPrint("Layout stabilization completed");
 
-        // Resize the window to match the actual content height so Electron doesn't clip it
-        const contentHeight = Math.ceil(content.scrollHeight) + 20;
-        win.setContentSize(RECEIPT_WINDOW_WIDTH_PX, contentHeight);
-        
-        // Force a repaint to ensure all content is fully rendered
-        win.webContents.invalidate();
-        
-        // Give time for the resize and repaint to take effect
-        await delay(300);
-
-        const printers = await win.webContents.getPrintersAsync();
-        logPrint("Printers enumerated", {
-          count: printers.length,
-          printers: summarizePrintersDetailed(printers),
-        });
-
-        const deviceName = pickReceiptPrinter(printers, preferredPrinterName);
-
-        if (!deviceName) {
-          fail(
-            "Receipt printer not found (looked for XP-Q80H / Xprinter). Opening print dialog.",
-            { preferredPrinterName: preferredPrinterName?.trim() || null },
-          );
-          return;
-        }
-
-        logPrint("Using printer for silent print", {
-          deviceName,
-          preferredPrinterName: preferredPrinterName?.trim() || null,
-        });
-
-        const { success, failureReason, attempt } = await trySilentPrint(
+        const content = await measureReceiptContent(
           win.webContents,
-          deviceName,
+        );
+
+        logPrint(
+          "Receipt rendered in print window",
+          content,
+        );
+
+        if (content.innerTextLength < 8) {
+          logPrint(
+            "Warning: receipt body looks empty before print",
+          );
+        }
+
+        const contentHeight =
+          Math.ceil(content.scrollHeight) + 40;
+
+        win.setContentSize(
+          RECEIPT_WINDOW_WIDTH_PX,
           contentHeight,
         );
 
         await delay(800);
 
+        logPrint("About to enumerate printers");
+
+        const printers =
+          await win.webContents.getPrintersAsync();
+
+        logPrint("Printers enumerated", {
+          count: printers.length,
+          printers:
+            summarizePrintersDetailed(printers),
+        });
+
+        const deviceName = pickReceiptPrinter(
+          printers,
+          preferredPrinterName,
+        );
+
+        if (!deviceName) {
+          fail(
+            "Receipt printer not found",
+            {
+              preferredPrinterName:
+                preferredPrinterName?.trim() ||
+                null,
+            },
+          );
+
+          return;
+        }
+
+        logPrint("Using printer for silent print", {
+          deviceName,
+        });
+
+        logPrint(
+          "About to call trySilentPrint",
+        );
+
+        const {
+          success,
+          failureReason,
+          attempt,
+        } = await trySilentPrint(
+          win.webContents,
+          deviceName,
+        );
+
+        await delay(1000);
+
         if (success) {
-          logPrint("Silent print job submitted", { deviceName, attempt });
+          logPrint("Silent print job submitted", {
+            deviceName,
+            attempt,
+          });
+
           cleanup();
-          resolve({ ok: true, mode: "silent" });
+
+          resolve({
+            ok: true,
+            mode: "silent",
+          });
+
           return;
         }
 
         cleanup();
+
         const error =
           failureReason ||
-          `Could not print to ${deviceName}. Opening print dialog.`;
+          `Could not print to ${deviceName}`;
+
         logWindowsPrinterChecklist(deviceName);
-        logPrint("Silent print failed; use System button or fix driver", {
-          deviceName,
-          failureReason: failureReason || "(none)",
-        });
+
+        logPrint(
+          "Silent print failed; use system dialog",
+          {
+            deviceName,
+            failureReason:
+              failureReason || "(none)",
+          },
+        );
+
         resolve({
           ok: false,
           error,
@@ -341,8 +584,15 @@ export function printReceiptHtml(
         });
       } catch (e) {
         fail("Print threw an exception", {
-          error: e instanceof Error ? e.message : String(e),
-          stack: e instanceof Error ? e.stack : undefined,
+          error:
+            e instanceof Error
+              ? e.message
+              : String(e),
+
+          stack:
+            e instanceof Error
+              ? e.stack
+              : undefined,
         });
       }
     };
