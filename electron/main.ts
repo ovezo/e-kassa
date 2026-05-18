@@ -8,6 +8,7 @@ import { app, BrowserWindow, dialog } from "electron";
 import { appendBootLog, bootLogPath } from "./boot-log";
 import { appendLog, logFileLocation } from "./log-file";
 import { PRODUCT_IMAGES_DEV_POINTER_FILENAME } from "../src/lib/server/product-images";
+import { RECEIPT_LOGO_DEV_POINTER_FILENAME } from "../src/lib/server/receipt-logo";
 import { ensureDatabase } from "./db/bootstrap";
 import { setupPrismaForElectron } from "./db/setup-prisma";
 
@@ -80,6 +81,10 @@ function resolveDbPath(): string {
 
 function resolveProductImagesDir(): string {
   return path.join(app.getPath("userData"), "product-images");
+}
+
+function resolveReceiptLogoDir(): string {
+  return path.join(app.getPath("userData"), "receipt-logo");
 }
 
 function getFreePort(): Promise<number> {
@@ -172,6 +177,9 @@ async function ensureRendererBaseUrl(): Promise<string> {
   const imagesRoot =
     process.env.UNIKASSA_PRODUCT_IMAGES_ROOT?.trim() ||
     path.join(app.getPath("userData"), "product-images");
+  const receiptLogoRoot =
+    process.env.UNIKASSA_RECEIPT_LOGO_ROOT?.trim() ||
+    path.join(app.getPath("userData"), "receipt-logo");
 
   appendLog("Starting Next standalone", { serverJs, port, serverDir });
 
@@ -187,6 +195,7 @@ async function ensureRendererBaseUrl(): Promise<string> {
       NODE_ENV: "production",
       NODE_PATH: standaloneModules,
       UNIKASSA_PRODUCT_IMAGES_ROOT: imagesRoot,
+      UNIKASSA_RECEIPT_LOGO_ROOT: receiptLogoRoot,
       UNIKASSA_TIMEZONE: process.env.UNIKASSA_TIMEZONE ?? "Asia/Ashgabat",
     },
     stdio: ["ignore", "pipe", "pipe"],
@@ -307,7 +316,12 @@ app.whenReady().then(async () => {
   if (!fs.existsSync(productImagesDir)) {
     fs.mkdirSync(productImagesDir, { recursive: true });
   }
-  appendLog("Paths", { dbPath, productImagesDir });
+  const receiptLogoDir = resolveReceiptLogoDir();
+  process.env.UNIKASSA_RECEIPT_LOGO_ROOT = receiptLogoDir;
+  if (!fs.existsSync(receiptLogoDir)) {
+    fs.mkdirSync(receiptLogoDir, { recursive: true });
+  }
+  appendLog("Paths", { dbPath, productImagesDir, receiptLogoDir });
 
   if (isNextDevSession()) {
     try {
@@ -315,6 +329,12 @@ app.whenReady().then(async () => {
       fs.writeFileSync(pointerPath, `${productImagesDir}\n`, "utf8");
     } catch (e) {
       appendLog("Failed to write dev product-images pointer", e);
+    }
+    try {
+      const pointerPath = path.join(appRoot(), RECEIPT_LOGO_DEV_POINTER_FILENAME);
+      fs.writeFileSync(pointerPath, `${receiptLogoDir}\n`, "utf8");
+    } catch (e) {
+      appendLog("Failed to write dev receipt-logo pointer", e);
     }
   }
 

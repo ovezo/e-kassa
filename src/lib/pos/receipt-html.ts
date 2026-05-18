@@ -19,6 +19,11 @@ export type ReceiptPrintLabels = {
   footer: string;
 };
 
+export type ReceiptPrintLogo = {
+  dataUrl: string;
+  widthPercent: number;
+};
+
 export type ReceiptPrintPayload = {
   venueName: string;
   venueAddress: string;
@@ -31,6 +36,7 @@ export type ReceiptPrintPayload = {
   totals: ReceiptTotals;
   labels: ReceiptPrintLabels;
   servicePct: string;
+  logo?: ReceiptPrintLogo;
 };
 
 function escapeHtml(s: string): string {
@@ -95,6 +101,10 @@ export function buildReceiptPrintHtml(p: ReceiptPrintPayload): string {
       ? `<tr>${metaPair(p.labels.bellik, p.note)}<td colspan="2"></td></tr>`
       : "";
 
+  const logoBlock = p.logo
+    ? `<div class="receipt-logo-wrap"><img class="receipt-logo" src="${p.logo.dataUrl}" alt="" style="width:${p.logo.widthPercent}%;height:auto" /></div>`
+    : "";
+
   const customerValue =
     p.orderType === OrderType.TABLE ? p.customerLabel.trim() : "";
   const dateLabel = formatReceiptPrintDate(p.timestamp);
@@ -128,6 +138,17 @@ export function buildReceiptPrintHtml(p: ReceiptPrintPayload): string {
     print-color-adjust: exact;
   }
   .center { text-align: center; }
+  .receipt-logo-wrap {
+    text-align: center;
+    margin: 0 0 6px;
+    line-height: 0;
+  }
+  .receipt-logo {
+    display: block;
+    margin: 0 auto;
+    height: auto;
+    max-width: 100%;
+  }
   .venue {
     font-size: 15px;
     font-weight: bold;
@@ -227,6 +248,7 @@ export function buildReceiptPrintHtml(p: ReceiptPrintPayload): string {
 </style>
 </head>
 <body>
+  ${logoBlock}
   <div class="center venue">${escapeHtml(p.venueName)}</div>
   <div class="center address">${escapeHtml(p.venueAddress)}</div>
 

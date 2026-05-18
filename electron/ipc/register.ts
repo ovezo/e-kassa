@@ -59,6 +59,12 @@ const printReceiptSchema = z.object({
     footer: z.string(),
   }),
   servicePct: z.string(),
+  logo: z
+    .object({
+      dataUrl: z.string().min(1),
+      widthPercent: z.number().min(10).max(100),
+    })
+    .optional(),
 });
 
 export function registerIpcHandlers(prisma: PrismaClient): void {

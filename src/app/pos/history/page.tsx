@@ -13,6 +13,7 @@ import { unikassaInvoke } from "@/lib/electron-api";
 import { waitForPendingOrderDiscard } from "@/lib/pos/discard-empty-order";
 import type { PosOrderListRow } from "@/lib/pos/order-list-row";
 import { useLocale, useTranslations } from "@/lib/i18n/LocaleProvider";
+import { attachReceiptLogo } from "@/lib/pos/receipt-print-logo";
 import { printReceiptSilent, printReceiptSystemDialog } from "@/lib/pos/print-receipt";
 import type { ReceiptPrintPayload } from "@/lib/pos/receipt-html";
 import { readSession } from "@/lib/session";
@@ -155,7 +156,7 @@ export default function PosHistoryPage() {
     setPrintBusy(true);
     setError(null);
     try {
-      const res = await printReceiptSilent(payload);
+      const res = await printReceiptSilent(await attachReceiptLogo(payload));
       if (!res.ok) {
         setError(
           `${res.error ?? t("pos.order.receiptPrintFailed")} ${t("pos.order.receiptPrintTrySystem")}`,
@@ -168,12 +169,12 @@ export default function PosHistoryPage() {
     }
   }
 
-  function handleSystemPrintDaySummary() {
+  async function handleSystemPrintDaySummary() {
     const payload = buildDaySummaryPrintPayload();
     if (!payload) return;
 
     setError(null);
-    const res = printReceiptSystemDialog(payload);
+    const res = printReceiptSystemDialog(await attachReceiptLogo(payload));
     if (!res.ok) setError(res.error ?? t("pos.order.receiptPrintFailed"));
   }
 

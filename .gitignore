@@ -36,10 +36,13 @@ yarn-error.log*
 
 # Electron + next dev: absolute path to userData product-images (written at startup)
 /.unikassa-product-images-root
+/.unikassa-receipt-logo-root
 
 # uploaded product photos (paths stored in DB as /api/product-images/…)
 /product-images/*
 !/product-images/.gitkeep
+/receipt-logo/*
+!/receipt-logo/.gitkeep
 
 # prisma local db (dev) — path matches prisma/schema datasource
 /prisma/dev.db

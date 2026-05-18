@@ -13,6 +13,7 @@ import {
   type ReceiptLine,
   type ReceiptTotals,
 } from "@/lib/pos/receipt-print";
+import { attachReceiptLogo } from "@/lib/pos/receipt-print-logo";
 import { printReceiptSilent, printReceiptSystemDialog } from "@/lib/pos/print-receipt";
 import {
   buildReceiptPrintPayload,
@@ -253,7 +254,7 @@ export function OrderReceiptDialog({ orderId, onClose, onOrderUpdated }: OrderRe
     setPrintBusy(true);
     setError(null);
     try {
-      const res = await printReceiptSilent(payload);
+      const res = await printReceiptSilent(await attachReceiptLogo(payload));
       if (!res.ok) {
         setError(
           `${res.error ?? t("pos.order.receiptPrintFailed")} ${t("pos.order.receiptPrintTrySystem")}`,
@@ -266,12 +267,12 @@ export function OrderReceiptDialog({ orderId, onClose, onOrderUpdated }: OrderRe
     }
   }
 
-  function handleSystemPrint() {
+  async function handleSystemPrint() {
     const payload = buildPrintPayload();
     if (!payload || receiptVisibleLines.length === 0) return;
 
     setError(null);
-    const res = printReceiptSystemDialog(payload);
+    const res = printReceiptSystemDialog(await attachReceiptLogo(payload));
     if (!res.ok) setError(res.error ?? t("pos.order.receiptPrintFailed"));
   }
 
