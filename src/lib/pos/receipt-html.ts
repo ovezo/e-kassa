@@ -121,7 +121,7 @@ export function buildReceiptPrintHtml(p: ReceiptPrintPayload): string {
     width: 80mm;
     max-width: 80mm;
     margin: 0;
-    padding: 0 2mm 3mm 0;
+    padding: 0 0 3mm 0;
     color: #000;
     overflow: visible;
     -webkit-print-color-adjust: exact;
@@ -221,7 +221,7 @@ export function buildReceiptPrintHtml(p: ReceiptPrintPayload): string {
       width: 80mm;
       max-width: 80mm;
       font-size: 12px;
-      padding: 0 2mm 3mm 0;
+      padding: 0 0 3mm 0;
     }
   }
 </style>

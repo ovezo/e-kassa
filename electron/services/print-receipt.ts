@@ -184,7 +184,7 @@ async function trySilentPrint(
         vertical: THERMAL_DPI,
       },
 
-      scaleFactor: 100,
+      scaleFactor: 98,
     },
 
     {
@@ -208,7 +208,7 @@ async function trySilentPrint(
         vertical: THERMAL_DPI,
       },
 
-      scaleFactor: 100,
+      scaleFactor: 98,
     },
 
     {
@@ -223,7 +223,7 @@ async function trySilentPrint(
         height: 200000,
       },
 
-      scaleFactor: 100,
+      scaleFactor: 98,
     },
   ];
 
