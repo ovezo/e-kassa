@@ -3,6 +3,7 @@
 import { OrderType } from "@prisma/client";
 import { formatTmt } from "@/lib/format-money";
 import type { ReceiptLine, ReceiptTotals } from "@/lib/pos/receipt-print";
+import { DeliveryFeeRow } from "@/components/pos/DeliveryFeeRow";
 import { ServiceFeeRow } from "@/components/pos/ServiceFeeRow";
 
 type OrderReceiptViewProps = {
@@ -15,7 +16,6 @@ type OrderReceiptViewProps = {
   totals: ReceiptTotals;
   orderTypeLabel: (type: OrderType) => string;
   servicePct: string;
-  deliveryFee: string;
   t: (key: string, params?: Record<string, string>) => string;
 };
 
@@ -29,7 +29,6 @@ export function OrderReceiptView({
   totals,
   orderTypeLabel,
   servicePct,
-  deliveryFee,
   t,
 }: OrderReceiptViewProps) {
   return (
@@ -68,11 +67,8 @@ export function OrderReceiptView({
             t={t}
           />
         ) : null}
-        {orderType === OrderType.TAKEAWAY_DELIVERY && totals.deliveryFeeTmt > 0 ? (
-          <div className="flex justify-between text-stone-600">
-            <dt>{t("pos.order.deliveryLine", { fee: deliveryFee })}</dt>
-            <dd className="font-medium text-stone-900">{formatTmt(totals.deliveryFeeTmt)}</dd>
-          </div>
+        {orderType === OrderType.TAKEAWAY_DELIVERY ? (
+          <DeliveryFeeRow deliveryFeeTmt={totals.deliveryFeeTmt} t={t} />
         ) : null}
         <div className="flex justify-between border-t border-stone-900 pt-2 text-base font-bold text-stone-900">
           <dt>{t("pos.order.total")}</dt>

@@ -30,7 +30,7 @@ const serverJs = path.join(standaloneSrc, "server.js");
 
 if (!fs.existsSync(serverJs)) {
   console.error(
-    '[iKassir] .next/standalone/server.js not found. Run "next build" with output: "standalone".',
+    '[uniKassa] .next/standalone/server.js not found. Run "next build" with output: "standalone".',
   );
   process.exit(1);
 }
@@ -43,8 +43,8 @@ copyDir(path.join(root, ".next", "static"), path.join(standaloneDest, ".next", "
 
 const nextPkg = path.join(standaloneDest, "node_modules", "next", "package.json");
 if (!fs.existsSync(nextPkg)) {
-  console.error("[iKassir] Standalone bundle missing node_modules/next — build is incomplete.");
+  console.error("[uniKassa] Standalone bundle missing node_modules/next — build is incomplete.");
   process.exit(1);
 }
 
-console.log("[iKassir] Next standalone staged at", standaloneDest);
+console.log("[uniKassa] Next standalone staged at", standaloneDest);

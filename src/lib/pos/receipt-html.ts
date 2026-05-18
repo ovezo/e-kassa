@@ -114,10 +114,10 @@ export function buildReceiptPrintHtml(p: ReceiptPrintPayload): string {
     font-family: Calibri, "Segoe UI", Arial, Helvetica, sans-serif;
     font-size: 12px;
     line-height: 1.35;
-    width: 76mm;
-    max-width: 76mm;
+    width: 80mm;
+    max-width: 80mm;
     margin: 0;
-    padding: 0 0 3mm 0;
+    padding: 0 2mm 3mm 0;
     color: #000;
     overflow: visible;
     -webkit-print-color-adjust: exact;
@@ -214,10 +214,10 @@ export function buildReceiptPrintHtml(p: ReceiptPrintPayload): string {
   }
   @media print {
     body {
-      width: 76mm;
-      max-width: 76mm;
+      width: 80mm;
+      max-width: 80mm;
       font-size: 12px;
-      padding: 0 0 3mm 0;
+      padding: 0 2mm 3mm 0;
     }
   }
 </style>

@@ -40,7 +40,7 @@ export function logWindowsPrinterChecklist(deviceName: string): void {
       "Use the official Xprinter driver for XP-Q80H / XP-80C (not a generic text-only driver).",
       "Printer properties → Advanced: try Print directly to the printer; try disabling bidirectional support.",
       "Printer properties → Device Settings: paper width 80mm; no extra side margins if the driver offers them.",
-      "In iKassir use the System button — if that prints but Print does not, the driver ignores silent/API jobs.",
+      "In uniKassa use the System button — if that prints but Print does not, the driver ignores silent/API jobs.",
       "Set receipt_printer_name in app settings to the exact name shown in Windows (e.g. XP-80C).",
       "Temporarily set XP-80C as the default Windows printer, then retry Print.",
     ],

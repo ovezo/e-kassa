@@ -8,7 +8,7 @@ import { OrderReceiptView } from "@/components/OrderReceiptView";
 import { PageHeader } from "@/components/PageHeader";
 import { ReceiptModal } from "@/components/ReceiptModal";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { ikassirInvoke } from "@/lib/electron-api";
+import { unikassaInvoke } from "@/lib/electron-api";
 import { formatTmt } from "@/lib/format-money";
 import {
   calcReceiptTotals,
@@ -17,13 +17,14 @@ import {
   type ReceiptTotals,
 } from "@/lib/pos/receipt-print";
 import { printReceiptSilent, printReceiptSystemDialog } from "@/lib/pos/print-receipt";
+import { DeliveryFeeRow } from "@/components/pos/DeliveryFeeRow";
 import { ServiceFeeRow } from "@/components/pos/ServiceFeeRow";
+import { DELIVERY_FEE_STEP_TMT } from "@/lib/pos/delivery-fee";
 import {
   buildReceiptPrintPayload,
   receiptCustomerLabel,
   receiptPrintLabels,
 } from "@/lib/pos/receipt-print-payload";
-import { discardEmptyOrderIfNeeded } from "@/lib/pos/discard-empty-order";
 import { readSession } from "@/lib/session";
 import { productImageDisplayUrl } from "@/lib/product-image-url";
 import { useTranslations } from "@/lib/i18n/LocaleProvider";
@@ -34,6 +35,8 @@ const btnPrimary =
   "min-h-[52px] w-full touch-manipulation rounded-xl bg-stone-900 px-4 py-3 text-base font-semibold text-white hover:bg-stone-800 active:scale-[0.99] disabled:opacity-50";
 const btnReceipt =
   "min-h-[48px] flex-1 touch-manipulation rounded-xl border border-amber-300 bg-amber-50 px-3 py-2.5 text-base font-medium text-amber-950 hover:bg-amber-100 active:scale-[0.99] disabled:opacity-50";
+const btnBack =
+  "flex h-11 w-11 shrink-0 touch-manipulation items-center justify-center self-center rounded-xl border border-amber-300 bg-amber-50 text-amber-950 hover:bg-amber-100 active:scale-[0.99]";
 const btnDanger =
   "min-h-[44px] touch-manipulation rounded-lg border border-red-200 bg-white px-3 py-2 text-sm font-medium text-red-800 hover:bg-red-50";
 
@@ -73,28 +76,6 @@ type ProductRow = {
   sortOrder: number;
   imageUrl: string | null;
 };
-
-const MENU_CATEGORY_VIEW_KEY = "ikassir_menu_category_view";
-
-type MenuCategoryViewMode = "list" | "tabs";
-
-function readStoredMenuViewMode(): MenuCategoryViewMode {
-  if (typeof window === "undefined") return "list";
-  try {
-    const v = window.localStorage.getItem(MENU_CATEGORY_VIEW_KEY);
-    return v === "tabs" ? "tabs" : "list";
-  } catch {
-    return "list";
-  }
-}
-
-function writeStoredMenuViewMode(mode: MenuCategoryViewMode): void {
-  try {
-    window.localStorage.setItem(MENU_CATEGORY_VIEW_KEY, mode);
-  } catch {
-    /* ignore */
-  }
-}
 
 function ProductMenuImage({ src }: { src: string }) {
   const [failed, setFailed] = useState(false);
@@ -138,9 +119,21 @@ function ProductTile({
 export function OrderWorkspace() {
   const router = useRouter();
   const search = useSearchParams();
-  const orderId = search.get("id");
   const session = readSession();
   const t = useTranslations();
+
+  const initialOrderId = useRef(search.get("id"));
+  const initialPendingType = useRef(search.get("type") as OrderType | null);
+  const initialPendingTableId = useRef(search.get("tableId"));
+  
+  const [pendingOrderContext, setPendingOrderContext] = useState<{
+    type: OrderType;
+    tableId: string | null;
+  } | null>(
+    initialPendingType.current
+      ? { type: initialPendingType.current, tableId: initialPendingTableId.current }
+      : null
+  );
 
   const orderTypeLabel = useCallback(
     (type: OrderType) => {
@@ -175,11 +168,6 @@ export function OrderWorkspace() {
   } | null>(null);
   const [printBusy, setPrintBusy] = useState(false);
   const prevEffectiveOrderIdRef = useRef<string | null | undefined>(undefined);
-  const orderRef = useRef(order);
-  orderRef.current = order;
-  const orderIdRef = useRef(orderId);
-  orderIdRef.current = orderId;
-  const workspaceMountedRef = useRef(false);
 
   const storeProducts = useMemo(() => products.filter((p) => p.active), [products]);
 
@@ -204,17 +192,12 @@ export function OrderWorkspace() {
     return m;
   }, [storeProducts]);
 
-  const [menuViewMode, setMenuViewMode] = useState<MenuCategoryViewMode>("list");
   const [activeCategoryId, setActiveCategoryId] = useState<string | null>(null);
 
   const categoriesWithProducts = useMemo(
     () => categoriesSorted.filter((c) => (productsByCategory.get(c.id) ?? []).length > 0),
     [categoriesSorted, productsByCategory],
   );
-
-  useEffect(() => {
-    setMenuViewMode(readStoredMenuViewMode());
-  }, []);
 
   useEffect(() => {
     if (categoriesWithProducts.length === 0) {
@@ -228,30 +211,11 @@ export function OrderWorkspace() {
     );
   }, [categoriesWithProducts]);
 
-  const setMenuViewModeStored = useCallback((mode: MenuCategoryViewMode) => {
-    setMenuViewMode(mode);
-    writeStoredMenuViewMode(mode);
-  }, []);
-
-  const loadOrder = useCallback(async () => {
-    if (!orderId) return;
-    const o = await ikassirInvoke<{ ok: true; order: OrderDetail } | { ok: false; error: string }>(
-      "orders.get",
-      { id: orderId },
-    );
-    if (!o.ok) {
-      setError(o.error ?? "Order not found");
-      setOrder(null);
-      return;
-    }
-    setOrder(o.order);
-  }, [orderId]);
-
   const loadCatalog = useCallback(async () => {
     const [cats, prods, cfg] = await Promise.all([
-      ikassirInvoke<CategoryRow[]>("categories.list"),
-      ikassirInvoke<ProductRow[]>("products.list", {}),
-      ikassirInvoke<Record<string, string>>("settings.getAll"),
+      unikassaInvoke<CategoryRow[]>("categories.list"),
+      unikassaInvoke<ProductRow[]>("products.list", {}),
+      unikassaInvoke<Record<string, string>>("settings.getAll"),
     ]);
     setCategories(cats.filter((c) => c.active));
     setProducts(prods);
@@ -260,7 +224,10 @@ export function OrderWorkspace() {
   }, []);
 
   useEffect(() => {
-    if (!orderId) {
+    const orderId = initialOrderId.current;
+    const pendingType = initialPendingType.current;
+
+    if (!orderId && !pendingType) {
       setLoading(false);
       setOrder(null);
       return;
@@ -270,48 +237,39 @@ export function OrderWorkspace() {
     setError(null);
     void (async () => {
       try {
-        await Promise.all([loadOrder(), loadCatalog()]);
+        if (orderId) {
+          const [o] = await Promise.all([
+            unikassaInvoke<{ ok: true; order: OrderDetail } | { ok: false; error: string }>(
+              "orders.get",
+              { id: orderId }
+            ),
+            loadCatalog(),
+          ]);
+          if (!o.ok) {
+            setError(o.error ?? "Order not found");
+            setOrder(null);
+          } else {
+            setOrder(o.order);
+          }
+        } else {
+          await loadCatalog();
+        }
       } catch (e) {
         setError(e instanceof Error ? e.message : "Failed to load");
       } finally {
         setLoading(false);
       }
     })();
-  }, [orderId, loadOrder, loadCatalog]);
+  }, [loadCatalog]);
 
   const handleLeaveToOpen = useCallback(async () => {
-    if (!orderId) {
-      router.push("/pos/open");
-      return;
-    }
-    await discardEmptyOrderIfNeeded(orderId, orderRef.current);
     router.push("/pos/open");
-  }, [orderId, router]);
-
-  useEffect(() => {
-    const leavingOnCleanup = orderId;
-    if (!leavingOnCleanup) return;
-
-    workspaceMountedRef.current = true;
-
-    return () => {
-      workspaceMountedRef.current = false;
-
-      queueMicrotask(() => {
-        if (workspaceMountedRef.current && orderIdRef.current === leavingOnCleanup) {
-          return;
-        }
-        void discardEmptyOrderIfNeeded(leavingOnCleanup, orderRef.current);
-      });
-    };
-  }, [orderId]);
-
-  const effectiveOrderId = orderId;
+  }, [router]);
 
   const viewOrder = order;
 
   useEffect(() => {
-    const current = effectiveOrderId ?? null;
+    const current = order?.id ?? null;
     const prev = prevEffectiveOrderIdRef.current;
 
     if (prev !== undefined) {
@@ -324,9 +282,9 @@ export function OrderWorkspace() {
     }
 
     prevEffectiveOrderIdRef.current = current;
-  }, [effectiveOrderId]);
+  }, [order?.id]);
 
-  const canAddFromMenu = !!session && order?.status === OrderStatus.OPEN;
+  const canAddFromMenu = !!session && (order?.status === OrderStatus.OPEN || !!pendingOrderContext);
 
   const orderIsOpen = order?.status === OrderStatus.OPEN;
 
@@ -339,26 +297,23 @@ export function OrderWorkspace() {
     if (!printJob || !viewOrder) return null;
     if (!printJob.editable && printJob.totals) return printJob.totals;
     const pct = Number.parseFloat(settings?.service_fee_percent ?? "10");
-    const deliveryRaw = Number.parseFloat(settings?.delivery_fee_tmt ?? "3");
     return calcReceiptTotals(viewOrder.type, receiptVisibleLines, {
       serviceFeePercent: Number.isFinite(pct) ? pct : 10,
-      fullDeliveryFeeTmt:
-        viewOrder.deliveryFeeTmt || (Number.isFinite(deliveryRaw) ? deliveryRaw : 3),
+      fullDeliveryFeeTmt: viewOrder.deliveryFeeTmt,
       includeDelivery: true,
       serviceFeeWaived: viewOrder.serviceFeeWaived,
     });
   }, [printJob, viewOrder, receiptVisibleLines, settings]);
 
   async function toggleServiceFeeWaived() {
-    const oid = effectiveOrderId;
-    if (!oid || !session || !orderIsOpen || viewOrder?.type !== OrderType.TABLE) return;
+    if (!order || !session || !orderIsOpen || viewOrder?.type !== OrderType.TABLE) return;
     setBusy(true);
     setError(null);
     try {
-      const res = await ikassirInvoke<{ ok: boolean; order?: OrderDetail; error?: string }>(
+      const res = await unikassaInvoke<{ ok: boolean; order?: OrderDetail; error?: string }>(
         "orders.setServiceFeeWaived",
         {
-          orderId: oid,
+          orderId: order.id,
           waived: !viewOrder.serviceFeeWaived,
           actorUserId: session.id,
         },
@@ -372,16 +327,16 @@ export function OrderWorkspace() {
     }
   }
 
-  async function addProduct(productId: string) {
-    if (!session || !canAddFromMenu || !orderId) return;
+  async function adjustDeliveryFee(delta: number) {
+    if (!order || !session || !orderIsOpen || viewOrder?.type !== OrderType.TAKEAWAY_DELIVERY) return;
     setBusy(true);
     setError(null);
     try {
-      const res = await ikassirInvoke<{ ok: boolean; order?: OrderDetail; error?: string }>(
-        "orders.addLine",
-        { orderId, productId, qty: 1, actorUserId: session.id },
+      const res = await unikassaInvoke<{ ok: boolean; order?: OrderDetail; error?: string }>(
+        "orders.adjustDeliveryFee",
+        { orderId: order.id, delta, actorUserId: session.id },
       );
-      if (!res.ok || !res.order) setError(res.error ?? "Could not add item");
+      if (!res.ok || !res.order) setError(res.error ?? "Update failed");
       else setOrder(res.order);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Failed");
@@ -390,15 +345,57 @@ export function OrderWorkspace() {
     }
   }
 
-  async function setQty(lineId: string, qty: number) {
-    const oid = effectiveOrderId;
-    if (!oid || !session || !orderIsOpen) return;
+  async function addProduct(productId: string) {
+    if (!session) return;
     setBusy(true);
     setError(null);
     try {
-      const res = await ikassirInvoke<{ ok: boolean; order?: OrderDetail; error?: string }>(
+      if (order) {
+        if (!canAddFromMenu) return;
+        const res = await unikassaInvoke<{ ok: boolean; order?: OrderDetail; error?: string }>(
+          "orders.addLine",
+          { orderId: order.id, productId, qty: 1, actorUserId: session.id },
+        );
+        if (!res.ok || !res.order) setError(res.error ?? "Could not add item");
+        else setOrder(res.order);
+      } else if (pendingOrderContext) {
+        const res = await unikassaInvoke<{ ok: boolean; order?: OrderDetail; error?: string }>(
+          "orders.createWithLine",
+          {
+            type: pendingOrderContext.type,
+            tableId: pendingOrderContext.tableId,
+            productId,
+            qty: 1,
+            actorUserId: session.id,
+          },
+        );
+        if (!res.ok || !res.order) {
+          setError(res.error ?? "Could not create order");
+          return;
+        }
+        setOrder(res.order);
+        setPendingOrderContext(null);
+        window.history.replaceState(
+          null,
+          "",
+          `/pos/order?id=${encodeURIComponent(res.order.id)}`
+        );
+      }
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Failed");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function setQty(lineId: string, qty: number) {
+    if (!order || !session || !orderIsOpen) return;
+    setBusy(true);
+    setError(null);
+    try {
+      const res = await unikassaInvoke<{ ok: boolean; order?: OrderDetail; error?: string }>(
         "orders.updateLineQty",
-        { orderId: oid, lineId, qty, actorUserId: session.id },
+        { orderId: order.id, lineId, qty, actorUserId: session.id },
       );
       if (!res.ok || !res.order) setError(res.error ?? "Update failed");
       else setOrder(res.order);
@@ -410,20 +407,41 @@ export function OrderWorkspace() {
   }
 
   async function removeLine(lineId: string) {
-    const oid = effectiveOrderId;
-    if (!oid || !session || !orderIsOpen) return;
+    if (!order || !session || !orderIsOpen) return;
+    
+    const isLastLine = order.lines.length === 1;
+    
     setBusy(true);
     setError(null);
     try {
-      const res = await ikassirInvoke<{ ok: boolean; order?: OrderDetail; error?: string }>(
+      const res = await unikassaInvoke<{ ok: boolean; order?: OrderDetail; error?: string }>(
         "orders.removeLine",
-        { orderId: oid, lineId, actorUserId: session.id },
+        { orderId: order.id, lineId, actorUserId: session.id },
       );
       if (!res.ok || !res.order) {
         setError(res.error ?? "Remove failed");
         return;
       }
       setOrder(res.order);
+      
+      if (isLastLine) {
+        const orderType = order.type;
+        const tableId = order.tableId;
+        
+        const deleteRes = await unikassaInvoke<{ ok: boolean; discarded?: boolean; error?: string }>(
+          "orders.discardIfEmpty",
+          { orderId: order.id, actorUserId: session.id }
+        );
+        
+        if (deleteRes.ok && deleteRes.discarded) {
+          setOrder(null);
+          setPendingOrderContext({ type: orderType, tableId });
+          
+          const params = new URLSearchParams({ type: orderType });
+          if (tableId) params.set("tableId", tableId);
+          window.history.replaceState(null, "", `/pos/order?${params.toString()}`);
+        }
+      }
     } catch (e) {
       setError(e instanceof Error ? e.message : "Failed");
     } finally {
@@ -432,15 +450,14 @@ export function OrderWorkspace() {
   }
 
   async function closeOrder() {
-    const oid = effectiveOrderId;
-    if (!oid || !session || !order || !orderIsOpen) return;
+    if (!order || !session || !orderIsOpen) return;
     if (!confirm(t("pos.order.closeConfirm", { total: formatTmt(order.totalTmt) }))) return;
     setBusy(true);
     setError(null);
     try {
-      const res = await ikassirInvoke<{ ok: boolean; order?: OrderDetail; error?: string }>(
+      const res = await unikassaInvoke<{ ok: boolean; order?: OrderDetail; error?: string }>(
         "orders.close",
-        { orderId: oid, actorUserId: session.id },
+        { orderId: order.id, actorUserId: session.id },
       );
       if (!res.ok || !res.order) setError(res.error ?? "Close failed");
       else {
@@ -459,7 +476,7 @@ export function OrderWorkspace() {
     setPrintBusy(false);
   }
 
-  if (!orderId) {
+  if (!order && !pendingOrderContext) {
     return (
       <div className="space-y-4">
         <PageHeader title={t("pos.order.title")} backHref="/pos/open" />
@@ -487,7 +504,7 @@ export function OrderWorkspace() {
     return <p className="text-lg text-stone-500">{t("pos.order.loading")}</p>;
   }
 
-  if (orderId && error && !order) {
+  if (initialOrderId.current && error && !order) {
     return (
       <div className="space-y-4">
         <PageHeader title={t("pos.order.title")} backHref="/pos/open" />
@@ -499,10 +516,29 @@ export function OrderWorkspace() {
     );
   }
 
-  if (!viewOrder) return null;
+  const mockOrderForPending = pendingOrderContext && !order ? {
+    id: "",
+    type: pendingOrderContext.type,
+    status: OrderStatus.OPEN,
+    openedAt: new Date().toISOString(),
+    closedAt: null,
+    tableId: pendingOrderContext.tableId,
+    table: null,
+    lines: [],
+    subtotalTmt: 0,
+    serviceFeeTmt: 0,
+    serviceFeeWaived: false,
+    deliveryFeeTmt: 0,
+    totalTmt: 0,
+    openedBy: { id: session?.id ?? "", displayName: session?.displayName ?? "" },
+  } as OrderDetail : null;
+
+  if (!viewOrder && !mockOrderForPending) return null;
+
+  const displayOrder = viewOrder ?? mockOrderForPending;
+  if (!displayOrder) return null;
 
   const servicePct = settings?.service_fee_percent ?? "10";
-  const deliveryFee = settings?.delivery_fee_tmt ?? "3";
   function showReceipt() {
     if (!viewOrder || viewOrder.lines.length === 0 || !orderIsOpen) return;
     setPrintJob({
@@ -578,128 +614,77 @@ export function OrderWorkspace() {
 
   return (
     <div className="flex min-h-0 flex-1 flex-col gap-3 overflow-hidden print:min-h-0 print:overflow-visible print:gap-2">
-      <div className="shrink-0 print:hidden">
-        <PageHeader
-          title={
-            <>
-              {orderTypeLabel(viewOrder.type)}
-              {viewOrder.table ? ` · ${viewOrder.table.label}` : ""}
-            </>
-          }
-          onBack={handleLeaveToOpen}
-          actions={
-            <div
-              role="group"
-              aria-label={t("pos.order.menuViewToggleAria")}
-              className="inline-flex rounded-lg border border-stone-300 bg-stone-100 p-px shadow-sm"
-            >
-              <button
-                type="button"
-                className={`min-h-8 min-w-[3.25rem] touch-manipulation rounded-md px-2 py-1 text-xs font-semibold leading-tight transition sm:min-h-9 sm:px-2.5 sm:text-[13px] ${
-                  menuViewMode === "list"
-                    ? "bg-white text-stone-900 shadow-sm"
-                    : "text-stone-600 hover:text-stone-900"
-                }`}
-                onClick={() => setMenuViewModeStored("list")}
-              >
-                {t("pos.order.menuViewList")}
-              </button>
-              <button
-                type="button"
-                className={`min-h-8 min-w-[3.25rem] touch-manipulation rounded-md px-2 py-1 text-xs font-semibold leading-tight transition sm:min-h-9 sm:px-2.5 sm:text-[13px] ${
-                  menuViewMode === "tabs"
-                    ? "bg-white text-stone-900 shadow-sm"
-                    : "text-stone-600 hover:text-stone-900"
-                }`}
-                onClick={() => setMenuViewModeStored("tabs")}
-              >
-                {t("pos.order.menuViewTabs")}
-              </button>
-            </div>
-          }
-        />
-      </div>
-
       {error ? (
         <p className="shrink-0 rounded-xl bg-amber-50 px-4 py-2 text-sm text-amber-950 print:hidden">{error}</p>
       ) : null}
 
       <div className="flex min-h-0 flex-1 flex-row gap-0 overflow-hidden rounded-2xl border border-stone-200 bg-stone-50/50 print:hidden">
         <section className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden border-r border-stone-200 p-4 sm:p-5">
-          {menuViewMode === "tabs" ? (
-            <>
-              <div className="shrink-0 overflow-x-auto overscroll-x-contain border-b border-stone-200 pb-3">
-                <div className="flex w-max min-w-full gap-1.5">
-                  {categoriesWithProducts.map((cat) => {
-                    const active = cat.id === activeCategoryId;
-                    return (
-                      <button
-                        key={cat.id}
-                        type="button"
-                        className={`shrink-0 touch-manipulation rounded-xl border px-4 py-2.5 text-base font-semibold transition active:scale-[0.99] ${
-                          active
-                            ? "border-stone-900 bg-stone-900 text-white shadow-sm"
-                            : "border-stone-200 bg-white text-stone-800 hover:border-amber-300 hover:bg-amber-50/60"
-                        }`}
-                        onClick={() => setActiveCategoryId(cat.id)}
-                      >
-                        {cat.name}
-                      </button>
-                    );
-                  })}
-                </div>
-              </div>
-              <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain pt-4">
-                {activeCategoryId ? (
-                  <div className="grid grid-cols-4 gap-3">
-                    {(productsByCategory.get(activeCategoryId) ?? []).map((p) => (
-                      <ProductTile
-                        key={p.id}
-                        product={p}
-                        disabled={busy || !canAddFromMenu}
-                        onAdd={() => void addProduct(p.id)}
-                      />
-                    ))}
-                  </div>
-                ) : null}
-              </div>
-            </>
-          ) : (
-            <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain">
-              <div className="space-y-10">
-                {categoriesSorted.map((cat) => {
-                  const plist = productsByCategory.get(cat.id) ?? [];
-                  if (plist.length === 0) return null;
+          <div className="flex shrink-0 items-stretch gap-2 border-b border-stone-200 pb-3">
+            <button
+              type="button"
+              className={btnBack}
+              aria-label={t("common.back")}
+              onClick={() => void handleLeaveToOpen()}
+            >
+              <svg
+                viewBox="0 0 24 24"
+                className="h-5 w-5"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                aria-hidden
+              >
+                <path d="M15 18l-6-6 6-6" />
+              </svg>
+            </button>
+            <div className="min-w-0 flex-1 overflow-x-auto overscroll-x-contain">
+              <div className="flex w-max gap-1.5 pr-1">
+                {categoriesWithProducts.map((cat) => {
+                  const active = cat.id === activeCategoryId;
                   return (
-                    <div key={cat.id} id={`cat-${cat.id}`} className="scroll-mt-2">
-                      <h3 className="mb-3 border-b border-stone-200 pb-2 text-xl font-semibold text-stone-900">
-                        {cat.name}
-                      </h3>
-                      <div className="grid grid-cols-4 gap-3">
-                        {plist.map((p) => (
-                          <ProductTile
-                            key={p.id}
-                            product={p}
-                            disabled={busy || !canAddFromMenu}
-                            onAdd={() => void addProduct(p.id)}
-                          />
-                        ))}
-                      </div>
-                    </div>
+                    <button
+                      key={cat.id}
+                      type="button"
+                      className={`shrink-0 touch-manipulation rounded-xl border px-4 py-2.5 text-base font-semibold transition active:scale-[0.99] ${
+                        active
+                          ? "border-stone-900 bg-stone-900 text-white shadow-sm"
+                          : "border-stone-200 bg-white text-stone-800 hover:border-amber-300 hover:bg-amber-50/60"
+                      }`}
+                      onClick={() => setActiveCategoryId(cat.id)}
+                    >
+                      {cat.name}
+                    </button>
                   );
                 })}
               </div>
             </div>
-          )}
+          </div>
+          <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain pt-4">
+            {activeCategoryId ? (
+              <div className="grid grid-cols-4 gap-3">
+                {(productsByCategory.get(activeCategoryId) ?? []).map((p) => (
+                  <ProductTile
+                    key={p.id}
+                    product={p}
+                    disabled={busy || !canAddFromMenu}
+                    onAdd={() => void addProduct(p.id)}
+                  />
+                ))}
+              </div>
+            ) : null}
+          </div>
         </section>
 
         <aside className="flex h-full min-h-0 w-[min(100%,300px)] min-w-[300px] shrink-0 flex-col self-stretch border-l border-stone-200 bg-white">
           <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 pt-4 sm:px-5">
             <ul className="divide-y divide-stone-100">
-              {viewOrder.lines.length === 0 ? (
+              {displayOrder.lines.length === 0 ? (
                 <li className="py-8 text-center text-stone-500">{t("pos.order.cartEmpty")}</li>
               ) : (
-                viewOrder.lines.map((line) => (
+                displayOrder.lines.map((line) => (
                   <li key={line.id} className="py-4">
                     <div className="flex items-start justify-between gap-2">
                       <span className="min-w-0 flex-1 font-medium leading-snug text-stone-900">
@@ -757,43 +742,47 @@ export function OrderWorkspace() {
 
           <div className="shrink-0 space-y-2 border-t border-stone-200 bg-stone-50/80 px-4 py-4 sm:px-5">
             <dl className="space-y-1.5 text-sm">
-              {viewOrder.type !== OrderType.TAKEAWAY_PICKUP ? (
+              {displayOrder.type !== OrderType.TAKEAWAY_PICKUP ? (
                 <div className="flex justify-between text-stone-600">
                   <dt>{t("pos.order.subtotal")}</dt>
-                  <dd className="font-medium text-stone-900">{formatTmt(viewOrder.subtotalTmt)}</dd>
+                  <dd className="font-medium text-stone-900">{formatTmt(displayOrder.subtotalTmt)}</dd>
                 </div>
               ) : null}
-              {viewOrder.type === OrderType.TABLE ? (
+              {displayOrder.type === OrderType.TABLE ? (
                 <ServiceFeeRow
                   servicePct={servicePct}
-                  serviceFeeTmt={viewOrder.serviceFeeTmt}
-                  waived={viewOrder.serviceFeeWaived}
-                  editable={orderIsOpen}
+                  serviceFeeTmt={displayOrder.serviceFeeTmt}
+                  waived={displayOrder.serviceFeeWaived}
+                  editable={orderIsOpen && !!order}
                   toggleDisabled={busy}
                   onToggle={() => void toggleServiceFeeWaived()}
                   t={t}
                 />
               ) : null}
-              {viewOrder.type === OrderType.TAKEAWAY_DELIVERY ? (
-                <div className="flex justify-between text-stone-600">
-                  <dt>{t("pos.order.deliveryLine", { fee: deliveryFee })}</dt>
-                  <dd className="font-medium text-stone-900">{formatTmt(viewOrder.deliveryFeeTmt)}</dd>
-                </div>
+              {displayOrder.type === OrderType.TAKEAWAY_DELIVERY ? (
+                <DeliveryFeeRow
+                  deliveryFeeTmt={displayOrder.deliveryFeeTmt}
+                  editable={orderIsOpen && !!order}
+                  disabled={busy}
+                  onDecrease={() => void adjustDeliveryFee(-DELIVERY_FEE_STEP_TMT)}
+                  onIncrease={() => void adjustDeliveryFee(DELIVERY_FEE_STEP_TMT)}
+                  t={t}
+                />
               ) : null}
               <div className="flex justify-between text-base font-bold text-stone-900">
                 <dt>{t("pos.order.total")}</dt>
-                <dd>{formatTmt(viewOrder.totalTmt)}</dd>
+                <dd>{formatTmt(displayOrder.totalTmt)}</dd>
               </div>
             </dl>
           </div>
 
           <div className="shrink-0 border-t border-stone-200 bg-white p-4 sm:p-5 sm:pt-4">
-            {viewOrder.status === OrderStatus.OPEN ? (
+            {displayOrder.status === OrderStatus.OPEN ? (
               <div className="flex gap-2">
-                {effectiveOrderId ? (
+                {order && viewOrder ? (
                   <button
                     type="button"
-                    disabled={busy || viewOrder.lines.length === 0}
+                    disabled={busy || displayOrder.lines.length === 0}
                     className={`${btnReceipt} flex-1`}
                     onClick={() => showReceipt()}
                   >
@@ -802,8 +791,8 @@ export function OrderWorkspace() {
                 ) : null}
                 <button
                   type="button"
-                  disabled={busy || viewOrder.lines.length === 0}
-                  className={`${btnPrimary} ${effectiveOrderId ? "flex-1" : "w-full"}`}
+                  disabled={busy || displayOrder.lines.length === 0}
+                  className={`${btnPrimary} ${order && viewOrder ? "flex-1" : "w-full"}`}
                   onClick={() => void closeOrder()}
                 >
                   {t("pos.order.payClose")}
@@ -852,31 +841,31 @@ export function OrderWorkspace() {
             <EditableOrderReceiptView
               venueName={venueName}
               orderId={order.id}
-              orderType={viewOrder.type}
-              tableLabel={viewOrder.table?.label ?? null}
+              orderType={order.type}
+              tableLabel={order.table?.label ?? null}
               timestamp={order.openedAt}
               allLines={printJob.allLines}
               omittedLineIds={printJob.omittedLineIds}
               totals={receiptDisplayTotals}
               orderTypeLabel={orderTypeLabel}
               servicePct={servicePct}
-              deliveryFee={deliveryFee}
               onToggleLine={toggleLineOnReceipt}
               onToggleServiceFee={() => void toggleServiceFeeWaived()}
+              onDecreaseDeliveryFee={() => void adjustDeliveryFee(-DELIVERY_FEE_STEP_TMT)}
+              onIncreaseDeliveryFee={() => void adjustDeliveryFee(DELIVERY_FEE_STEP_TMT)}
               t={t}
             />
           ) : (
             <OrderReceiptView
               venueName={venueName}
               orderId={order.id}
-              orderType={viewOrder.type}
-              tableLabel={viewOrder.table?.label ?? null}
+              orderType={order.type}
+              tableLabel={order.table?.label ?? null}
               timestamp={order.closedAt ?? order.openedAt}
               lines={receiptVisibleLines}
               totals={receiptDisplayTotals}
               orderTypeLabel={orderTypeLabel}
               servicePct={servicePct}
-              deliveryFee={deliveryFee}
               t={t}
             />
           )}

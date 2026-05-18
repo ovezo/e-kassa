@@ -1,6 +1,6 @@
 export type Locale = "en" | "ru";
 
-export const LOCALE_STORAGE_KEY = "ikassir-locale";
+export const LOCALE_STORAGE_KEY = "unikassa-locale";
 export const LOCALE_STORAGE_KEYS_LEGACY = ["me-kassa-locale", "ekassa-locale"] as const;
 
 /** Flat keys: English source strings for fallbacks. */
@@ -17,7 +17,7 @@ export const en: Record<string, string> = {
   "common.close": "Close",
   "common.open": "Open",
   "common.closed": "Closed",
-  "common.brand": "iKassir",
+  "common.brand": "uniKassa",
 
   "lang.en": "EN",
   "lang.ru": "RU",
@@ -30,7 +30,6 @@ export const en: Record<string, string> = {
   "pos.nav.logout": "Log out",
 
   "pos.home.title": "Reception",
-  "pos.home.subtitle": "Choose an action below.",
   "pos.home.createOrder": "Create order",
   "pos.home.createOrderHint": "Table or take-away",
   "pos.home.openOrders": "Open orders",
@@ -39,7 +38,6 @@ export const en: Record<string, string> = {
   "pos.home.todayHint": "History & receipts",
 
   "pos.create.title": "Create order",
-  "pos.create.subtitle": "Pick-up, delivery, or table (dine-in).",
   "pos.create.pickup": "Pick-up",
   "pos.create.pickupHint": "Customer collects — no service fee",
   "pos.create.delivery": "Delivery",
@@ -53,29 +51,24 @@ export const en: Record<string, string> = {
   "pos.create.footer": "Pick-up vs delivery and table picker open from these routes.",
 
   "pos.table.title": "Table service",
-  "pos.table.subtitle": "Choose a table to open the order screen.",
   "pos.table.openTabs": "open tab(s)",
   "pos.table.available": "Available",
   "pos.table.occupiedHint": "Use Open orders to continue this table",
   "pos.table.noTables": "No tables configured. Add tables in Admin → Catalog.",
 
   "pos.takeaway.title": "Take-away",
-  "pos.takeaway.subtitle": "Pick-up has no service fee. Delivery adds the delivery fee from settings.",
   "pos.takeaway.pickup": "Pick-up",
   "pos.takeaway.pickupHint": "Customer collects",
   "pos.takeaway.delivery": "Delivery",
   "pos.takeaway.deliveryHint": "Adds delivery fee",
 
   "pos.open.title": "Open orders",
-  "pos.open.subtitle": "Tap an order to add items or close it.",
   "pos.open.empty": "No open orders. Start one from Create order.",
   "pos.open.reception": "Reception",
   "pos.open.badge": "Open",
   "pos.open.linesMeta": "{count} line(s)",
 
   "pos.history.title": "Today",
-  "pos.history.subtitle":
-    "Business day 6:00–6:00. Orders opened since 6:00 today (venue time).",
   "pos.history.empty": "No orders yet today.",
   "pos.history.badgeOpen": "Open",
   "pos.history.badgeClosed": "Closed",
@@ -106,9 +99,6 @@ export const en: Record<string, string> = {
   "pos.order.type.pickup": "Pick-up",
   "pos.order.type.delivery": "Delivery",
   "pos.order.menu": "Menu",
-  "pos.order.menuViewList": "List",
-  "pos.order.menuViewTabs": "Tabs",
-  "pos.order.menuViewToggleAria": "How categories are shown",
   "pos.order.cart": "Cart",
   "pos.order.cartEmpty": "No items yet",
   "pos.order.each": "each",
@@ -119,6 +109,9 @@ export const en: Record<string, string> = {
   "pos.order.serviceRemove": "Remove service fee",
   "pos.order.serviceRestore": "Restore service fee",
   "pos.order.deliveryLine": "Delivery ({fee} TMT)",
+  "pos.order.deliveryFee": "Delivery",
+  "pos.order.deliveryDecrease": "Reduce delivery fee by 5 TMT",
+  "pos.order.deliveryIncrease": "Increase delivery fee by 5 TMT",
   "pos.order.total": "Total",
   "pos.order.payClose": "Close",
   "pos.order.printReceipt": "View receipt",
@@ -156,8 +149,7 @@ export const en: Record<string, string> = {
   "pos.receipt.print.hyzmat": "Hyzmat",
   "pos.receipt.print.footer": "NOŞ BOLSUN !",
 
-  "login.title": "iKassir",
-  "login.subtitle": "Staff sign in",
+  "login.title": "uniKassa",
   "login.login": "Login",
   "login.password": "Password",
   "login.submit": "Sign in",
@@ -167,8 +159,7 @@ export const en: Record<string, string> = {
   "login.errDev": "Start the dev server: npm run dev or npm run dev:web.",
   "login.errNetwork": "Could not reach the server. Run `npm run dev:web` or `npm run dev` and try again.",
 
-  "setup.title": "Welcome to iKassir",
-  "setup.subtitle": "Create the first administrator",
+  "setup.title": "Welcome to uniKassa",
   "setup.displayName": "Display name",
   "setup.passwordLabel": "Password (min 3 characters)",
   "setup.submit": "Create admin & continue",
@@ -176,13 +167,39 @@ export const en: Record<string, string> = {
   "setup.backLink": "Back to sign in",
   "setup.errComplete": "Could not complete setup.",
 
-  "admin.brand": "iKassir admin",
+  "admin.brand": "uniKassa admin",
   "admin.nav.dashboard": "Dashboard",
   "admin.nav.users": "Users",
   "admin.nav.logs": "Logs",
   "admin.nav.catalog": "Catalog",
+  "admin.nav.orderHistory": "Order History",
   "admin.nav.reports": "Reports",
+  "admin.nav.settings": "Settings",
   "admin.backPos": "Back to POS",
+
+  "admin.dashboard.title": "Dashboard",
+  "admin.dashboard.closedToday": "Closed today",
+  "admin.dashboard.revenueToday": "Revenue today",
+  "admin.dashboard.openOrders": "Open orders",
+  "admin.dashboard.errLoad": "Failed to load",
+
+  "admin.settings.title": "Settings",
+  "admin.settings.venueName": "Venue name (on receipt)",
+  "admin.settings.venueAddress": "Venue address (on receipt)",
+  "admin.settings.receiptFooter": "Receipt footer message",
+  "admin.settings.serviceFee": "Service fee % (table orders)",
+  "admin.settings.deliveryFee": "Delivery fee (TMT)",
+  "admin.settings.errLoad": "Failed to load settings",
+  "admin.settings.errSave": "Save failed",
+
+  "admin.orderHistory.title": "Order History",
+  "admin.orderHistory.filterTitle": "Date Range Filter",
+  "admin.orderHistory.startDate": "Start Date & Time",
+  "admin.orderHistory.endDate": "End Date & Time",
+  "admin.orderHistory.search": "Search",
+  "admin.orderHistory.viewSummary": "View Summary",
+  "admin.orderHistory.summaryTitle": "Period Summary",
+  "admin.orderHistory.empty": "No orders found in this date range.",
 };
 
 export const ru: Record<string, string> = {
@@ -198,7 +215,7 @@ export const ru: Record<string, string> = {
   "common.close": "Закрыть",
   "common.open": "Открыт",
   "common.closed": "Закрыт",
-  "common.brand": "iKassir",
+  "common.brand": "uniKassa",
 
   "lang.en": "EN",
   "lang.ru": "RU",
@@ -211,7 +228,6 @@ export const ru: Record<string, string> = {
   "pos.nav.logout": "Выйти",
 
   "pos.home.title": "Ресепшен",
-  "pos.home.subtitle": "Выберите действие ниже.",
   "pos.home.createOrder": "Новый заказ",
   "pos.home.createOrderHint": "Стол или навынос",
   "pos.home.openOrders": "Открытые заказы",
@@ -220,7 +236,6 @@ export const ru: Record<string, string> = {
   "pos.home.todayHint": "История и чеки",
 
   "pos.create.title": "Новый заказ",
-  "pos.create.subtitle": "Самовывоз, доставка или стол в зале.",
   "pos.create.pickup": "Самовывоз",
   "pos.create.pickupHint": "Клиент забирает — без сервиса",
   "pos.create.delivery": "Доставка",
@@ -234,30 +249,24 @@ export const ru: Record<string, string> = {
   "pos.create.footer": "Самовывоз, доставка и выбор стола открываются с этих экранов.",
 
   "pos.table.title": "Обслуживание за столом",
-  "pos.table.subtitle": "Выберите стол, чтобы открыть заказ.",
   "pos.table.openTabs": "откр. счёт(ов)",
   "pos.table.available": "Свободен",
   "pos.table.occupiedHint": "Откройте счёт в разделе «Открытые заказы»",
   "pos.table.noTables": "Столы не настроены. Добавьте столы в Админ → Каталог.",
 
   "pos.takeaway.title": "Навынос",
-  "pos.takeaway.subtitle":
-    "Самовывоз без сервисного сбора. Доставка добавляет плату из настроек.",
   "pos.takeaway.pickup": "Самовывоз",
   "pos.takeaway.pickupHint": "Клиент забирает сам",
   "pos.takeaway.delivery": "Доставка",
   "pos.takeaway.deliveryHint": "Добавляется плата за доставку",
 
   "pos.open.title": "Открытые заказы",
-  "pos.open.subtitle": "Нажмите заказ, чтобы добавить позиции или закрыть.",
   "pos.open.empty": "Нет открытых заказов. Создайте заказ через «Новый заказ».",
   "pos.open.reception": "Ресепшен",
   "pos.open.badge": "Открыт",
   "pos.open.linesMeta": "{count} поз.",
 
   "pos.history.title": "Сегодня",
-  "pos.history.subtitle":
-    "Рабочий день 6:00–6:00. Заказы, открытые с 6:00 сегодня (время заведения).",
   "pos.history.empty": "Сегодня заказов пока нет.",
   "pos.history.badgeOpen": "Открыт",
   "pos.history.badgeClosed": "Закрыт",
@@ -288,9 +297,6 @@ export const ru: Record<string, string> = {
   "pos.order.type.pickup": "Самовывоз",
   "pos.order.type.delivery": "Доставка",
   "pos.order.menu": "Меню",
-  "pos.order.menuViewList": "Список",
-  "pos.order.menuViewTabs": "Вкладки",
-  "pos.order.menuViewToggleAria": "Как показывать категории",
   "pos.order.cart": "Корзина",
   "pos.order.cartEmpty": "Пока пусто",
   "pos.order.each": "за шт.",
@@ -301,6 +307,9 @@ export const ru: Record<string, string> = {
   "pos.order.serviceRemove": "Убрать сервисный сбор",
   "pos.order.serviceRestore": "Вернуть сервисный сбор",
   "pos.order.deliveryLine": "Доставка ({fee} TMT)",
+  "pos.order.deliveryFee": "Доставка",
+  "pos.order.deliveryDecrease": "Уменьшить сбор за доставку на 5 TMT",
+  "pos.order.deliveryIncrease": "Увеличить сбор за доставку на 5 TMT",
   "pos.order.total": "Итого",
   "pos.order.payClose": "Закрыть",
   "pos.order.printReceipt": "Показать чек",
@@ -338,8 +347,7 @@ export const ru: Record<string, string> = {
   "pos.receipt.print.hyzmat": "Hyzmat",
   "pos.receipt.print.footer": "NOŞ BOLSUN !",
 
-  "login.title": "iKassir",
-  "login.subtitle": "Вход для персонала",
+  "login.title": "uniKassa",
   "login.login": "Логин",
   "login.password": "Пароль",
   "login.submit": "Войти",
@@ -349,8 +357,7 @@ export const ru: Record<string, string> = {
   "login.errDev": "Запустите сервер разработки: npm run dev или npm run dev:web.",
   "login.errNetwork": "Не удалось связаться с сервером. Запустите npm run dev:web или npm run dev и попробуйте снова.",
 
-  "setup.title": "Добро пожаловать в iKassir",
-  "setup.subtitle": "Создайте первого администратора",
+  "setup.title": "Добро пожаловать в uniKassa",
   "setup.displayName": "Отображаемое имя",
   "setup.passwordLabel": "Пароль (не менее 3 символов)",
   "setup.submit": "Создать администратора и продолжить",
@@ -358,13 +365,39 @@ export const ru: Record<string, string> = {
   "setup.backLink": "Ко входу",
   "setup.errComplete": "Не удалось завершить настройку.",
 
-  "admin.brand": "iKassir админ",
+  "admin.brand": "uniKassa админ",
   "admin.nav.dashboard": "Панель",
   "admin.nav.users": "Пользователи",
   "admin.nav.logs": "Журнал",
   "admin.nav.catalog": "Каталог",
+  "admin.nav.orderHistory": "История заказов",
   "admin.nav.reports": "Отчёты",
+  "admin.nav.settings": "Настройки",
   "admin.backPos": "К POS",
+
+  "admin.dashboard.title": "Панель",
+  "admin.dashboard.closedToday": "Закрыто сегодня",
+  "admin.dashboard.revenueToday": "Выручка сегодня",
+  "admin.dashboard.openOrders": "Открытые заказы",
+  "admin.dashboard.errLoad": "Не удалось загрузить",
+
+  "admin.settings.title": "Настройки",
+  "admin.settings.venueName": "Название (в чеке)",
+  "admin.settings.venueAddress": "Адрес (в чеке)",
+  "admin.settings.receiptFooter": "Текст внизу чека",
+  "admin.settings.serviceFee": "Сервисный сбор % (стол)",
+  "admin.settings.deliveryFee": "Сбор за доставку (TMT)",
+  "admin.settings.errLoad": "Не удалось загрузить настройки",
+  "admin.settings.errSave": "Не удалось сохранить",
+
+  "admin.orderHistory.title": "История заказов",
+  "admin.orderHistory.filterTitle": "Фильтр диапазона дат",
+  "admin.orderHistory.startDate": "Начальная дата и время",
+  "admin.orderHistory.endDate": "Конечная дата и время",
+  "admin.orderHistory.search": "Поиск",
+  "admin.orderHistory.viewSummary": "Просмотр сводки",
+  "admin.orderHistory.summaryTitle": "Сводка за период",
+  "admin.orderHistory.empty": "Заказов в этом диапазоне дат не найдено.",
 };
 
 export const dictionaries: Record<Locale, Record<string, string>> = { en, ru };

@@ -1,5 +1,5 @@
 import { OrderStatus } from "@prisma/client";
-import { ikassirInvoke } from "@/lib/electron-api";
+import { unikassaInvoke } from "@/lib/electron-api";
 import { readSession } from "@/lib/session";
 
 type OrderSnapshot = {
@@ -26,7 +26,7 @@ export async function discardEmptyOrderIfNeeded(
     if (snapshot.status !== OrderStatus.OPEN || snapshot.lines.length > 0) return;
   }
 
-  const run = ikassirInvoke("orders.discardIfEmpty", {
+  const run = unikassaInvoke("orders.discardIfEmpty", {
     orderId,
     actorUserId: sess.id,
   }).then(() => undefined);

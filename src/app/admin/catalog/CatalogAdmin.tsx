@@ -19,7 +19,7 @@ import {
 } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import { useCallback, useEffect, useMemo, useState, type FormEvent, type ReactNode, type SVGProps } from "react";
-import { ikassirInvoke } from "@/lib/electron-api";
+import { unikassaInvoke } from "@/lib/electron-api";
 import { formatTmt } from "@/lib/format-money";
 import { productImageDisplayUrl } from "@/lib/product-image-url";
 import { readSession } from "@/lib/session";
@@ -461,17 +461,17 @@ export function CatalogAdmin() {
   }, [products]);
 
   const loadCategories = useCallback(async () => {
-    const list = await ikassirInvoke<CategoryRow[]>("categories.list");
+    const list = await unikassaInvoke<CategoryRow[]>("categories.list");
     setCategories(list);
   }, []);
 
   const loadProducts = useCallback(async () => {
-    const list = await ikassirInvoke<ProductRow[]>("products.list", {});
+    const list = await unikassaInvoke<ProductRow[]>("products.list", {});
     setProducts(list);
   }, []);
 
   const loadTables = useCallback(async () => {
-    const list = await ikassirInvoke<TableRow[]>("tables.list");
+    const list = await unikassaInvoke<TableRow[]>("tables.list");
     setTables(list);
   }, []);
 
@@ -494,7 +494,7 @@ export function CatalogAdmin() {
   }, [refresh]);
 
   async function persistCategoryOrder(orderedIds: string[]) {
-    const res = await ikassirInvoke<{ ok: boolean; error?: string }>("categories.reorder", {
+    const res = await unikassaInvoke<{ ok: boolean; error?: string }>("categories.reorder", {
       orderedIds,
       actorUserId: actorId,
     });
@@ -502,7 +502,7 @@ export function CatalogAdmin() {
   }
 
   async function persistTableOrder(orderedIds: string[]) {
-    const res = await ikassirInvoke<{ ok: boolean; error?: string }>("tables.reorder", {
+    const res = await unikassaInvoke<{ ok: boolean; error?: string }>("tables.reorder", {
       orderedIds,
       actorUserId: actorId,
     });
@@ -510,7 +510,7 @@ export function CatalogAdmin() {
   }
 
   async function persistProductOrder(categoryId: string, orderedIds: string[]) {
-    const res = await ikassirInvoke<{ ok: boolean; error?: string }>("products.reorder", {
+    const res = await unikassaInvoke<{ ok: boolean; error?: string }>("products.reorder", {
       categoryId,
       orderedIds,
       actorUserId: actorId,
@@ -562,7 +562,7 @@ export function CatalogAdmin() {
     ev.preventDefault();
     setBusy(true);
     try {
-      const res = await ikassirInvoke<{ ok: boolean; error?: string }>("categories.create", {
+      const res = await unikassaInvoke<{ ok: boolean; error?: string }>("categories.create", {
         name: catForm.name,
         actorUserId: actorId,
       });
@@ -582,7 +582,7 @@ export function CatalogAdmin() {
     if (!confirm("Delete this category?")) return;
     setBusy(true);
     try {
-      const res = await ikassirInvoke<{ ok: boolean; error?: string }>("categories.delete", {
+      const res = await unikassaInvoke<{ ok: boolean; error?: string }>("categories.delete", {
         id,
         actorUserId: actorId,
       });
@@ -606,7 +606,7 @@ export function CatalogAdmin() {
     setBusy(true);
     setError(null);
     try {
-      const res = await ikassirInvoke<{ ok: boolean; error?: string }>("categories.update", {
+      const res = await unikassaInvoke<{ ok: boolean; error?: string }>("categories.update", {
         id: editCategory.id,
         name: editCategory.name.trim(),
         active: editCategory.active,
@@ -628,7 +628,7 @@ export function CatalogAdmin() {
     ev.preventDefault();
     setBusy(true);
     try {
-      const res = await ikassirInvoke<{ ok: boolean; error?: string }>("products.create", {
+      const res = await unikassaInvoke<{ ok: boolean; error?: string }>("products.create", {
         name: prodForm.name,
         priceTmt: prodForm.priceTmt,
         categoryId: prodForm.categoryId,
@@ -652,7 +652,7 @@ export function CatalogAdmin() {
     if (!confirm("Delete product?")) return;
     setBusy(true);
     try {
-      const res = await ikassirInvoke<{ ok: boolean; error?: string }>("products.delete", {
+      const res = await unikassaInvoke<{ ok: boolean; error?: string }>("products.delete", {
         id,
         actorUserId: actorId,
       });
@@ -680,7 +680,7 @@ export function CatalogAdmin() {
     setBusy(true);
     setError(null);
     try {
-      const res = await ikassirInvoke<{ ok: boolean; error?: string }>("products.update", {
+      const res = await unikassaInvoke<{ ok: boolean; error?: string }>("products.update", {
         id: editProduct.id,
         name: editProduct.name.trim(),
         priceTmt: editProduct.priceTmt,
@@ -711,7 +711,7 @@ export function CatalogAdmin() {
     ev.preventDefault();
     setBusy(true);
     try {
-      const res = await ikassirInvoke<{ ok: boolean; error?: string }>("tables.create", {
+      const res = await unikassaInvoke<{ ok: boolean; error?: string }>("tables.create", {
         label: tableForm.label,
         actorUserId: actorId,
       });
@@ -731,7 +731,7 @@ export function CatalogAdmin() {
     if (!confirm("Delete table?")) return;
     setBusy(true);
     try {
-      const res = await ikassirInvoke<{ ok: boolean; error?: string }>("tables.delete", {
+      const res = await unikassaInvoke<{ ok: boolean; error?: string }>("tables.delete", {
         id,
         actorUserId: actorId,
       });
@@ -755,7 +755,7 @@ export function CatalogAdmin() {
     setBusy(true);
     setError(null);
     try {
-      const res = await ikassirInvoke<{ ok: boolean; error?: string }>("tables.update", {
+      const res = await unikassaInvoke<{ ok: boolean; error?: string }>("tables.update", {
         id: editTable.id,
         label: editTable.label.trim(),
         active: editTable.active,
@@ -781,11 +781,7 @@ export function CatalogAdmin() {
 
   return (
     <div className="space-y-6">
-      <PageHeader
-        title="Catalog"
-        subtitle="Categories, products (add-ons as separate products), and tables. Use the grip on the left to drag and sort — on touchscreens, hold the grip briefly before moving."
-        backHref="/admin/dashboard"
-      />
+      <PageHeader title="Catalog" backHref="/admin/dashboard" />
 
       {error ? (
         <p className="rounded-xl bg-red-50 px-4 py-3 text-base text-red-800">{error}</p>

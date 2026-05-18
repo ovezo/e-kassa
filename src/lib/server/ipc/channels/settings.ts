@@ -5,7 +5,7 @@ import { audit } from "../audit";
 const DEFAULTS: Record<string, string> = {
   service_fee_percent: "10",
   delivery_fee_tmt: "3",
-  venue_name: "iKassir",
+  venue_name: "uniKassa",
   venue_address: "",
   receipt_footer: "NOŞ BOLSUN !",
   /** Optional; partial match. Empty = auto-detect XP-Q80H / Xprinter. */

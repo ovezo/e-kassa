@@ -1,7 +1,8 @@
 "use client";
 
 import type { ReactNode } from "react";
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
+import { createPortal } from "react-dom";
 import { useTranslations } from "@/lib/i18n/LocaleProvider";
 
 type ReceiptModalProps = {
@@ -29,6 +30,11 @@ export function ReceiptModal({
   printBusy = false,
 }: ReceiptModalProps) {
   const t = useTranslations();
+  const [portalReady, setPortalReady] = useState(false);
+
+  useEffect(() => {
+    setPortalReady(true);
+  }, []);
 
   useEffect(() => {
     if (!open) return;
@@ -39,24 +45,24 @@ export function ReceiptModal({
     return () => window.removeEventListener("keydown", onKey);
   }, [open, onClose]);
 
-  if (!open) return null;
+  if (!open || !portalReady) return null;
 
   const showPrintFooter = onPrint || onSystemPrint;
 
-  return (
+  return createPortal(
     <div
-      className="fixed inset-0 z-[9999] flex items-center justify-center p-4"
+      className="fixed inset-0 z-[9999] flex min-h-dvh items-center justify-center p-4"
       role="dialog"
       aria-modal="true"
       aria-labelledby={title ? "receipt-modal-title" : undefined}
     >
       <button
         type="button"
-        className="absolute inset-0 bg-stone-900/50"
+        className="absolute inset-0 min-h-dvh bg-stone-900/50"
         aria-label={t("common.close")}
         onClick={onClose}
       />
-      <div className="relative z-10 flex max-h-[min(90vh,720px)] w-full max-w-md flex-col overflow-hidden rounded-2xl border border-stone-200 bg-white shadow-xl">
+      <div className="relative z-10 flex max-h-[min(90dvh,720px)] w-full max-w-md flex-col overflow-hidden rounded-2xl border border-stone-200 bg-white shadow-xl">
         <div className="flex shrink-0 items-center justify-between gap-2 border-b border-stone-200 px-4 py-3">
           {title ? (
             <h2 id="receipt-modal-title" className="min-w-0 flex-1 text-lg font-semibold text-stone-900">
@@ -113,6 +119,7 @@ export function ReceiptModal({
           </div>
         ) : null}
       </div>
-    </div>
+    </div>,
+    document.body,
   );
 }

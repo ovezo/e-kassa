@@ -1,6 +1,6 @@
 import { contextBridge, ipcRenderer } from "electron";
 
-contextBridge.exposeInMainWorld("ikassir", {
+contextBridge.exposeInMainWorld("unikassa", {
   invoke: (channel: string, payload?: unknown) =>
-    ipcRenderer.invoke("ikassir", { channel, payload }),
+    ipcRenderer.invoke("unikassa", { channel, payload }),
 });

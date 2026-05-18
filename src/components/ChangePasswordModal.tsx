@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { ikassirInvoke } from "@/lib/electron-api";
+import { unikassaInvoke } from "@/lib/electron-api";
 import { NumberPad } from "./NumberPad";
 import { useTranslations } from "@/lib/i18n/LocaleProvider";
 
@@ -33,7 +33,7 @@ export function ChangePasswordModal({
     setError(null);
     setBusy(true);
     try {
-      const res = await ikassirInvoke<{ ok: boolean; error?: string }>(
+      const res = await unikassaInvoke<{ ok: boolean; error?: string }>(
         "users.update",
         { id: userId, password, actorUserId: actorId },
       );

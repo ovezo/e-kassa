@@ -2,7 +2,7 @@ export {};
 
 declare global {
   interface Window {
-    ikassir?: {
+    unikassa?: {
       invoke<T = unknown>(channel: string, payload?: unknown): Promise<T>;
     };
   }

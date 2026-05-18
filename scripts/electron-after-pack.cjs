@@ -36,14 +36,14 @@ exports.default = async function afterPack(context) {
     ".prisma",
   );
 
-  console.log("[iKassir] afterPack: copying Prisma client to", dest);
+  console.log("[uniKassa] afterPack: copying Prisma client to", dest);
   fs.rmSync(dest, { recursive: true, force: true });
   copyDir(src, dest);
 
   const resources = path.join(context.appOutDir, "resources");
   const stagedPrismaCli = path.join(projectRoot, "build", "prisma-cli", "node_modules");
   if (fs.existsSync(path.join(stagedPrismaCli, "prisma", "build", "index.js"))) {
-    console.log("[iKassir] afterPack: syncing prisma-cli bundle to", path.join(resources, "prisma-cli"));
+    console.log("[uniKassa] afterPack: syncing prisma-cli bundle to", path.join(resources, "prisma-cli"));
     fs.rmSync(path.join(resources, "prisma-cli"), { recursive: true, force: true });
     copyDir(path.join(projectRoot, "build", "prisma-cli"), path.join(resources, "prisma-cli"));
   }
@@ -76,7 +76,7 @@ exports.default = async function afterPack(context) {
   );
   if (!fs.existsSync(unpackedPrismaClient)) {
     console.warn(
-      "[iKassir] afterPack: @prisma/client runtime not in app.asar.unpacked — " +
+      "[uniKassa] afterPack: @prisma/client runtime not in app.asar.unpacked — " +
         "ensure package.json asarUnpack includes node_modules/@prisma/client/**",
     );
   }
@@ -97,12 +97,12 @@ exports.default = async function afterPack(context) {
           `Run npm run build (prepare-next-standalone) before dist:win.`,
       );
     }
-    console.log("[iKassir] afterPack: repairing next-standalone (node_modules was omitted)");
+    console.log("[uniKassa] afterPack: repairing next-standalone (node_modules was omitted)");
     fs.rmSync(path.join(resources, "next-standalone"), { recursive: true, force: true });
     copyDir(staged, path.join(resources, "next-standalone"));
   }
 
-  const templateDb = path.join(resources, "ikassir-template.db");
+  const templateDb = path.join(resources, "unikassa-template.db");
   if (!fs.existsSync(templateDb)) {
     throw new Error(
       `Template database missing (${templateDb}). Run npm run prepare:pack before dist:win.`,
@@ -128,7 +128,7 @@ exports.default = async function afterPack(context) {
       if (!name.endsWith(".db") && !name.endsWith(".db-journal")) continue;
       const file = path.join(prismaResources, name);
       if (!fs.statSync(file).isFile()) continue;
-      console.warn("[iKassir] afterPack: removing stray database file from installer:", file);
+      console.warn("[uniKassa] afterPack: removing stray database file from installer:", file);
       fs.unlinkSync(file);
     }
     const stillDevDb = path.join(prismaResources, "dev.db");

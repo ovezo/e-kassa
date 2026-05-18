@@ -2,7 +2,7 @@
 
 import { PageHeader } from "@/components/PageHeader";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { ikassirInvoke } from "@/lib/electron-api";
+import { unikassaInvoke } from "@/lib/electron-api";
 
 type LogRow = {
   id: string;
@@ -29,7 +29,7 @@ export default function AdminLogsPage() {
     setError(null);
     setLoading(true);
     try {
-      const page = await ikassirInvoke<LogsPage>("logs.list", { limit: 200 });
+      const page = await unikassaInvoke<LogsPage>("logs.list", { limit: 200 });
       setLogs(page.items);
       setNextCursor(page.nextCursor);
     } catch (e) {
@@ -43,7 +43,7 @@ export default function AdminLogsPage() {
     if (!nextCursor || loading) return;
     setLoading(true);
     try {
-      const page = await ikassirInvoke<LogsPage>("logs.list", {
+      const page = await unikassaInvoke<LogsPage>("logs.list", {
         limit: 200,
         cursor: nextCursor,
       });
@@ -79,11 +79,7 @@ export default function AdminLogsPage() {
 
   return (
     <div className="space-y-4">
-      <PageHeader
-        title="Audit log"
-        subtitle="Newest first. Scroll down to load older entries (200 per batch)."
-        backHref="/admin/dashboard"
-      />
+      <PageHeader title="Audit log" backHref="/admin/dashboard" />
       {error ? (
         <p className="rounded-xl bg-red-50 px-4 py-3 text-base text-red-800">{error}</p>
       ) : null}

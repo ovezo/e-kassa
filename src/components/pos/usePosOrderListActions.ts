@@ -2,7 +2,7 @@
 
 import { OrderStatus } from "@prisma/client";
 import { useCallback, useState } from "react";
-import { ikassirInvoke } from "@/lib/electron-api";
+import { unikassaInvoke } from "@/lib/electron-api";
 import { formatTmt } from "@/lib/format-money";
 import type { PosOrderListRow } from "@/lib/pos/order-list-row";
 import { useTranslations } from "@/lib/i18n/LocaleProvider";
@@ -30,7 +30,7 @@ export function usePosOrderListActions(onOrdersChange: () => void | Promise<void
 
       setPayCloseBusyId(order.id);
       try {
-        const res = await ikassirInvoke<{ ok: boolean; error?: string }>("orders.close", {
+        const res = await unikassaInvoke<{ ok: boolean; error?: string }>("orders.close", {
           orderId: order.id,
           actorUserId: session.id,
         });
@@ -60,7 +60,7 @@ export function usePosOrderListActions(onOrdersChange: () => void | Promise<void
 
       setDeletingId(order.id);
       try {
-        const res = await ikassirInvoke<{ ok: boolean; error?: string }>("orders.delete", {
+        const res = await unikassaInvoke<{ ok: boolean; error?: string }>("orders.delete", {
           orderId: order.id,
           actorUserId: session.id,
         });
@@ -78,11 +78,16 @@ export function usePosOrderListActions(onOrdersChange: () => void | Promise<void
     [session, t, onOrdersChange],
   );
 
+  const notifyReceiptOrderUpdated = useCallback(() => {
+    void onOrdersChange();
+  }, [onOrdersChange]);
+
   return {
     session,
     receiptOrderId,
     openReceipt,
     closeReceipt,
+    onReceiptOrderUpdated: notifyReceiptOrderUpdated,
     payClose,
     payCloseBusyId,
     deleteOrder,

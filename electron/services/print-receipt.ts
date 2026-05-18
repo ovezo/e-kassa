@@ -132,6 +132,7 @@ async function trySilentPrint(
       color: false,
       margins: { marginType: "none" },
       pageSize: { width: THERMAL_WIDTH_MICRONS, height: heightMicrons },
+      dpi: { horizontal: THERMAL_DPI, vertical: THERMAL_DPI },
     },
     {
       silent: true,
@@ -139,6 +140,17 @@ async function trySilentPrint(
       printBackground: true,
       color: false,
       margins: { marginType: "none" },
+      pageSize: { width: THERMAL_WIDTH_MICRONS, height: heightMicrons },
+      dpi: { horizontal: THERMAL_DPI, vertical: THERMAL_DPI },
+      scaleFactor: 100,
+    },
+    {
+      silent: true,
+      deviceName,
+      printBackground: true,
+      color: false,
+      margins: { marginType: "none" },
+      dpi: { horizontal: THERMAL_DPI, vertical: THERMAL_DPI },
     },
     {
       silent: true,
@@ -146,6 +158,7 @@ async function trySilentPrint(
       printBackground: true,
       color: false,
       margins: { marginType: "printableArea" },
+      dpi: { horizontal: THERMAL_DPI, vertical: THERMAL_DPI },
     },
   ];
 
@@ -182,7 +195,7 @@ function delay(ms: number): Promise<void> {
 }
 
 async function loadReceiptHtml(win: BrowserWindow, html: string): Promise<string | null> {
-  const tmpPath = path.join(os.tmpdir(), `ikassir-receipt-${process.pid}-${Date.now()}.html`);
+  const tmpPath = path.join(os.tmpdir(), `unikassa-receipt-${process.pid}-${Date.now()}.html`);
   try {
     fs.writeFileSync(tmpPath, html, "utf8");
     await win.loadFile(tmpPath);
@@ -220,6 +233,7 @@ export function printReceiptHtml(
         nodeIntegration: false,
         contextIsolation: true,
         sandbox: false,
+        offscreen: false,
       },
     });
 
@@ -250,7 +264,14 @@ export function printReceiptHtml(
     const run = async () => {
       try {
         tmpPath = await loadReceiptHtml(win, html);
-        await delay(400);
+        
+        // Wait for the page to finish rendering before measuring
+        await new Promise<void>((resolve) => {
+          win.webContents.once("did-finish-load", () => {
+            // Additional delay to ensure CSS and layout are fully applied
+            setTimeout(() => resolve(), 600);
+          });
+        });
 
         const content = await measureReceiptContent(win.webContents);
         logPrint("Receipt rendered in print window", content);
@@ -261,6 +282,12 @@ export function printReceiptHtml(
         // Resize the window to match the actual content height so Electron doesn't clip it
         const contentHeight = Math.ceil(content.scrollHeight) + 20;
         win.setContentSize(RECEIPT_WINDOW_WIDTH_PX, contentHeight);
+        
+        // Force a repaint to ensure all content is fully rendered
+        win.webContents.invalidate();
+        
+        // Give time for the resize and repaint to take effect
+        await delay(300);
 
         const printers = await win.webContents.getPrintersAsync();
         logPrint("Printers enumerated", {

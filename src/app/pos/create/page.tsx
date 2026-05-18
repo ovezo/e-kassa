@@ -4,7 +4,6 @@ import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { OrderType } from "@prisma/client";
 import { PageHeader } from "@/components/PageHeader";
-import { startNewOrder } from "@/lib/pos/start-new-order";
 import { readSession } from "@/lib/session";
 import {
   IconDelivery,
@@ -34,12 +33,9 @@ export default function PosCreatePage() {
     setError(null);
     setBusy(busyKey);
     try {
-      const res = await startNewOrder({ type, tableId, actorUserId: session.id });
-      if (!res.ok) {
-        setError(res.error);
-        return;
-      }
-      router.push(`/pos/order?id=${encodeURIComponent(res.orderId)}`);
+      const params = new URLSearchParams({ type });
+      if (tableId) params.set("tableId", tableId);
+      router.push(`/pos/order?${params.toString()}`);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Failed");
     } finally {
@@ -49,7 +45,7 @@ export default function PosCreatePage() {
 
   return (
     <div className="flex min-h-[60vh] flex-col gap-6">
-      <PageHeader title={t("pos.create.title")} subtitle={t("pos.create.subtitle")} backHref="/pos/open" />
+      <PageHeader title={t("pos.create.title")} backHref="/pos/open" />
       {error ? (
         <p className="rounded-xl bg-red-50 px-4 py-3 text-base text-red-800">{error}</p>
       ) : null}

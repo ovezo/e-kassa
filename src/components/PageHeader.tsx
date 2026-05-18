@@ -8,25 +8,21 @@ const ROOT_PATHS = new Set(["/pos/open", "/login", "/setup", "/admin/dashboard"]
 
 type PageHeaderProps = {
   title: ReactNode;
-  subtitle?: ReactNode;
   backHref?: string;
   /** When set, runs instead of `backHref` / `router.back()` (may be async). */
   onBack?: () => void | Promise<void>;
   showBack?: boolean;
   titleClassName?: string;
-  subtitleClassName?: string;
   actions?: ReactNode;
   className?: string;
 };
 
 export function PageHeader({
   title,
-  subtitle,
   backHref,
   onBack,
   showBack,
   titleClassName = "text-2xl font-semibold text-stone-800",
-  subtitleClassName = "text-base text-stone-600",
   actions,
   className = "",
 }: PageHeaderProps) {
@@ -48,7 +44,7 @@ export function PageHeader({
   }
 
   return (
-    <div className={`flex flex-wrap items-start justify-between items-center gap-3 ${className}`}>
+    <div className={`flex flex-wrap items-center justify-between gap-3 ${className}`}>
       <div className="flex min-w-0 flex-1 flex-col">
         {shouldShowBack ? (
           <div className="flex items-center gap-0.5 sm:gap-1 ml-1">
@@ -76,7 +72,6 @@ export function PageHeader({
         ) : (
           <h1 className={`${titleClassName} min-w-0`}>{title}</h1>
         )}
-        {subtitle != null ? <p className={subtitleClassName}>{subtitle}</p> : null}
       </div>
       {actions ? <div className="flex shrink-0 flex-wrap items-center gap-2">{actions}</div> : null}
     </div>

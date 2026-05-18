@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { ikassirInvoke } from "@/lib/electron-api";
+import { unikassaInvoke } from "@/lib/electron-api";
 import { readSession, saveSession, type SessionUser } from "@/lib/session";
 import { LanguageSwitcher } from "@/components/LanguageSwitcher";
 import { useTranslations } from "@/lib/i18n/LocaleProvider";
@@ -38,7 +38,7 @@ export default function SetupPage() {
     let cancelled = false;
     (async () => {
       try {
-        const boot = await ikassirInvoke<Bootstrap>("auth/bootstrap");
+        const boot = await unikassaInvoke<Bootstrap>("auth/bootstrap");
         if (cancelled) return;
         if (!boot.needsSetup) {
           router.replace("/login");
@@ -61,7 +61,7 @@ export default function SetupPage() {
     setError(null);
     setBusy(true);
     try {
-      const res = await ikassirInvoke<SetupResult>("auth/setup-admin", {
+      const res = await unikassaInvoke<SetupResult>("auth/setup-admin", {
         login,
         password,
         displayName,
@@ -88,7 +88,6 @@ export default function SetupPage() {
         <h1 className="text-center text-2xl font-semibold tracking-tight text-stone-800">
           {t("setup.title")}
         </h1>
-        <p className="mt-1 text-center text-sm text-stone-500">{t("setup.subtitle")}</p>
         <form className="mt-8 space-y-4" onSubmit={onSubmit}>
           <div>
             <label className="block text-xs font-medium text-stone-600" htmlFor="dname">

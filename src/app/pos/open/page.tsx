@@ -7,8 +7,7 @@ import { PosOrderListGrid, PosOrderListGridItem } from "@/components/pos/PosOrde
 import { usePosOrderListActions } from "@/components/pos/usePosOrderListActions";
 import { useCallback, useEffect, useState } from "react";
 import { OrderType } from "@prisma/client";
-import { ikassirInvoke } from "@/lib/electron-api";
-import { waitForPendingOrderDiscard } from "@/lib/pos/discard-empty-order";
+import { unikassaInvoke } from "@/lib/electron-api";
 import type { PosOrderListRow } from "@/lib/pos/order-list-row";
 import { useLocale, useTranslations } from "@/lib/i18n/LocaleProvider";
 
@@ -21,8 +20,7 @@ export default function PosOpenOrdersPage() {
   const load = useCallback(async () => {
     setError(null);
     try {
-      await waitForPendingOrderDiscard();
-      const list = await ikassirInvoke<PosOrderListRow[]>("orders.listOpen");
+      const list = await unikassaInvoke<PosOrderListRow[]>("orders.listOpen");
       setOrders(list);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Failed to load");
@@ -33,6 +31,7 @@ export default function PosOpenOrdersPage() {
     receiptOrderId,
     openReceipt,
     closeReceipt,
+    onReceiptOrderUpdated,
     payClose,
     payCloseBusyId,
   } = usePosOrderListActions(load);
@@ -93,7 +92,11 @@ export default function PosOpenOrdersPage() {
         <p className="text-lg text-stone-500">{t("pos.open.empty")}</p>
       ) : null}
 
-      <OrderReceiptDialog orderId={receiptOrderId} onClose={closeReceipt} />
+      <OrderReceiptDialog
+        orderId={receiptOrderId}
+        onClose={closeReceipt}
+        onOrderUpdated={onReceiptOrderUpdated}
+      />
     </div>
   );
 }

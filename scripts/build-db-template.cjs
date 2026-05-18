@@ -6,7 +6,7 @@ const fs = require("fs");
 const path = require("path");
 
 const root = path.join(__dirname, "..");
-const template = path.join(root, "prisma", "ikassir-template.db");
+const template = path.join(root, "prisma", "unikassa-template.db");
 
 if (fs.existsSync(template)) {
   fs.unlinkSync(template);
@@ -29,4 +29,4 @@ if (!fs.existsSync(template)) {
   process.exit(1);
 }
 
-console.log("[iKassir] Template database ready:", template);
+console.log("[uniKassa] Template database ready:", template);

@@ -1,5 +1,5 @@
 import type { OrderType } from "@prisma/client";
-import { ikassirInvoke } from "@/lib/electron-api";
+import { unikassaInvoke } from "@/lib/electron-api";
 
 type OrderDetail = {
   id: string;
@@ -10,7 +10,7 @@ export async function startNewOrder(params: {
   tableId: string | null;
   actorUserId: string;
 }): Promise<{ ok: true; orderId: string } | { ok: false; error: string }> {
-  const res = await ikassirInvoke<{ ok: boolean; order?: OrderDetail; error?: string }>(
+  const res = await unikassaInvoke<{ ok: boolean; order?: OrderDetail; error?: string }>(
     "orders.create",
     {
       type: params.type,

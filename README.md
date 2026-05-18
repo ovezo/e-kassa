@@ -1,4 +1,4 @@
-# iKassir
+# uniKassa
 
 Desktop POS for a coffee shop reception: **Electron** + **Next.js** (normal server: `next dev` / `next start`) + **SQLite** via **Prisma**. See [docs/TECHNICAL_SPEC.md](docs/TECHNICAL_SPEC.md) for the full product and technical specification.
 
@@ -33,7 +33,7 @@ Desktop POS for a coffee shop reception: **Electron** + **Next.js** (normal serv
 
 ### Electron window does not appear
 
-1. In the terminal you should see **two** labeled streams: `[next]` and `[electron]`. Look for `[iKassir] Starting Electron…` then logs from `electron/main.ts` (`[iKassir] Electron main loaded…`).
+1. In the terminal you should see **two** labeled streams: `[next]` and `[electron]`. Look for `[uniKassa] Starting Electron…` then logs from `electron/main.ts` (`[uniKassa] Electron main loaded…`).
 2. On **macOS**, check the **Dock** and **Cmd+Tab** for **Electron** — the window sometimes opens behind other apps. We call `app.focus({ steal: true })` on ready to reduce that.
 3. If `[electron]` shows an error or exits immediately, run **two terminals** so logs are obvious:
    - Terminal A: `npm run dev:web` (or `cross-env NODE_ENV=development next dev`)
@@ -66,7 +66,7 @@ In this mode you can debug:
 
 ### Why there were two paths (IPC vs browser)
 
-Originally only `window.ikassir.invoke` (preload) talked to SQLite in the **Electron main** process. Browsers have no preload, so calls failed. In **development**, if preload is missing, the UI now **POSTs to `/api/ipc`** and Next runs the same auth logic against Prisma. That route returns **403 in production** so it is not a public API in shipped builds.
+Originally only `window.unikassa.invoke` (preload) talked to SQLite in the **Electron main** process. Browsers have no preload, so calls failed. In **development**, if preload is missing, the UI now **POSTs to `/api/ipc`** and Next runs the same auth logic against Prisma. That route returns **403 in production** so it is not a public API in shipped builds.
 
 ## Production build (local)
 
@@ -90,39 +90,39 @@ npm run dist:win
 
 Output:
 
-- **Installer (Windows 10/11, Intel/AMD):** `release/iKassir-Setup-0.1.0.exe` (NSIS `.exe`, 64-bit x64)
+- **Installer (Windows 10/11, Intel/AMD):** `release/uniKassa-Setup-0.1.0.exe` (NSIS `.exe`, 64-bit x64)
 - **Unpacked (testing):** `npm run dist:win:dir` → `release/win-unpacked/`
 
-The installed app stores its SQLite database under the user profile (e.g. `%APPDATA%\iKassir\ikassir.db`). On first launch, bundled Prisma migrations are applied automatically.
+The installed app stores its SQLite database under the user profile (e.g. `%APPDATA%\uniKassa\unikassa.db`). On first launch, bundled Prisma migrations are applied automatically.
 
 If you see **Cannot find module '.prisma/client/default'** after an older build, reinstall from a fresh `npm run dist:win` build (the installer bundles the Prisma client explicitly).
 
 ### Blank window or app won’t open again (Windows)
 
-The UI is served by a small **Next.js server** in `resources/next-standalone/` (not inside `app.asar`). If an old build left **iKassir** running in Task Manager, end that task, then start again.
+The UI is served by a small **Next.js server** in `resources/next-standalone/` (not inside `app.asar`). If an old build left **uniKassa** running in Task Manager, end that task, then start again.
 
 If the app exits immediately, open the log file (the error dialog shows the path), usually:
 
-`%APPDATA%\iKassir\ikassir.log` (folder name is **iKassir** with capital K — same as `Roaming\ikassir` on Windows)
+`%APPDATA%\uniKassa\unikassa.log` (folder name is **uniKassa** with capital K — same as `Roaming\unikassa` on Windows)
 
 ### `dev.db` inside `resources\prisma` (installed app)
 
 That file must **not** be there — it is only for development. The installed app uses:
 
-- **Your data:** `%APPDATA%\iKassir\ikassir.db`
-- **First-run template:** `resources\ikassir-template.db` (not `dev.db`)
+- **Your data:** `%APPDATA%\uniKassa\unikassa.db`
+- **First-run template:** `resources\unikassa-template.db` (not `dev.db`)
 
 If you see `dev.db` under `resources\prisma`, you are on an **old installer**. Rebuild with the latest code: `npm run prepare:pack` then `npm run dist:win`. New builds copy only `schema.prisma` + `migrations` into `resources\prisma` (no `.db` files).
 
 ### `no such table: Product` (SQLite)
 
-Usually an **old database file** is still present from a previous schema, or `npm run db:migrate` was run on `prisma/dev.db` while the **installed app** uses `%APPDATA%\iKassir\ikassir.db`.
+Usually an **old database file** is still present from a previous schema, or `npm run db:migrate` was run on `prisma/dev.db` while the **installed app** uses `%APPDATA%\uniKassa\unikassa.db`.
 
-**Installed app (Windows):** uninstall is not required — quit iKassir, delete:
+**Installed app (Windows):** uninstall is not required — quit uniKassa, delete:
 
-`%APPDATA%\iKassir\ikassir.db`
+`%APPDATA%\uniKassa\unikassa.db`
 
-Then start iKassir again (a fresh DB is created from the bundled template).
+Then start uniKassa again (a fresh DB is created from the bundled template).
 
 **Development (project folder):**
 
@@ -165,7 +165,7 @@ npm run dist        # macOS dmg/zip (on macOS)
 | `npm run db:studio` | Prisma Studio |
 | `npm run lint` | ESLint |
 | `npm run clean` | Remove `.next`, `out`, `dist-electron` |
-| `npm run dist:win` | Windows NSIS installer (`release/iKassir-Setup-*.exe`) |
+| `npm run dist:win` | Windows NSIS installer (`release/uniKassa-Setup-*.exe`) |
 | `npm run dist:win:dir` | Unpacked Windows app (`release/win-unpacked/`) |
 
 ## Project layout

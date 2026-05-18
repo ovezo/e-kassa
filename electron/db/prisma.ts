@@ -12,8 +12,8 @@ function databaseUrl(dbFilePath: string): string {
 export function getPrisma(dbFilePath: string): PrismaClient {
   if (!prisma) {
     const url = databaseUrl(dbFilePath);
-    console.error("[iKassir] Prisma datasource URL:", url);
-    console.error("[iKassir] Prisma DB file exists:", fs.existsSync(dbFilePath), dbFilePath);
+    console.error("[uniKassa] Prisma datasource URL:", url);
+    console.error("[uniKassa] Prisma DB file exists:", fs.existsSync(dbFilePath), dbFilePath);
     prisma = new PrismaClient({
       datasources: {
         db: { url },

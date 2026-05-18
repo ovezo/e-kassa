@@ -25,7 +25,7 @@ function resolvePrismaDir(appRoot: string): string {
 
 function resolveTemplateDbPath(): string | null {
   if (!app.isPackaged) return null;
-  const p = path.join(process.resourcesPath, "ikassir-template.db");
+  const p = path.join(process.resourcesPath, "unikassa-template.db");
   return fs.existsSync(p) ? p : null;
 }
 
@@ -72,8 +72,8 @@ function runMigrateDeploy(
     NODE_PATH: uniqueNodePath.join(path.delimiter),
   };
 
-  console.error("[iKassir] Running prisma migrate deploy →", dbFilePath);
-  console.error("[iKassir] Prisma CLI:", prismaCli);
+  console.error("[uniKassa] Running prisma migrate deploy →", dbFilePath);
+  console.error("[uniKassa] Prisma CLI:", prismaCli);
 
   const result = spawnSync(
     process.execPath,
@@ -89,7 +89,7 @@ function runMigrateDeploy(
 
   if (result.status !== 0) {
     const err = [result.stderr, result.stdout].filter(Boolean).join("\n");
-    console.error("[iKassir] migrate deploy output:\n", err);
+    console.error("[uniKassa] migrate deploy output:\n", err);
     throw new Error(err || "prisma migrate deploy failed");
   }
 }
@@ -108,12 +108,12 @@ export function ensureDatabase(dbFilePath: string, appRoot: string): void {
   if (!fs.existsSync(dbFilePath)) {
     if (templatePath) {
       fs.copyFileSync(templatePath, dbFilePath);
-      console.error("[iKassir] Created database from template →", dbFilePath);
+      console.error("[uniKassa] Created database from template →", dbFilePath);
       return;
     }
     if (app.isPackaged) {
       throw new Error(
-        "Install bundle incomplete (ikassir-template.db missing). Reinstall the application.",
+        "Install bundle incomplete (unikassa-template.db missing). Reinstall the application.",
       );
     }
     runMigrateDeploy(dbFilePath, prismaDir, schemaPath);

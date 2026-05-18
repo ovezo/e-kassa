@@ -4,8 +4,7 @@ import { useRouter } from "next/navigation";
 import { PageHeader } from "@/components/PageHeader";
 import { useCallback, useEffect, useState } from "react";
 import { OrderType } from "@prisma/client";
-import { ikassirInvoke } from "@/lib/electron-api";
-import { startNewOrder } from "@/lib/pos/start-new-order";
+import { unikassaInvoke } from "@/lib/electron-api";
 import { readSession } from "@/lib/session";
 import { useTranslations } from "@/lib/i18n/LocaleProvider";
 
@@ -32,7 +31,7 @@ export default function PosCreateTablePage() {
 
   const load = useCallback(async () => {
     try {
-      const list = await ikassirInvoke<TableRow[]>("tables.list");
+      const list = await unikassaInvoke<TableRow[]>("tables.list");
       setTables(list.filter((row) => row.active));
     } catch (e) {
       setError(e instanceof Error ? e.message : "Failed to load tables");
@@ -52,16 +51,11 @@ export default function PosCreateTablePage() {
     setBusyTableId(tableId);
     setError(null);
     try {
-      const res = await startNewOrder({
+      const params = new URLSearchParams({
         type: OrderType.TABLE,
         tableId,
-        actorUserId: session.id,
       });
-      if (!res.ok) {
-        setError(res.error);
-        return;
-      }
-      router.push(`/pos/order?id=${encodeURIComponent(res.orderId)}`);
+      router.push(`/pos/order?${params.toString()}`);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Failed");
     } finally {
@@ -71,11 +65,7 @@ export default function PosCreateTablePage() {
 
   return (
     <div className="space-y-6">
-      <PageHeader
-        title={t("pos.table.title")}
-        subtitle={t("pos.table.subtitle")}
-        backHref="/pos/create"
-      />
+      <PageHeader title={t("pos.table.title")} backHref="/pos/create" />
       {error ? (
         <p className="rounded-xl bg-red-50 px-4 py-3 text-base text-red-800">{error}</p>
       ) : null}

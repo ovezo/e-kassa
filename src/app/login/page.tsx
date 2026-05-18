@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { ikassirInvoke } from "@/lib/electron-api";
+import { unikassaInvoke } from "@/lib/electron-api";
 import { readSession, saveSession, type SessionUser } from "@/lib/session";
 import { LanguageSwitcher } from "@/components/LanguageSwitcher";
 import { useTranslations } from "@/lib/i18n/LocaleProvider";
@@ -48,14 +48,14 @@ export default function LoginPage() {
     let cancelled = false;
     (async () => {
       try {
-        const boot = await ikassirInvoke<Bootstrap>("auth/bootstrap");
+        const boot = await unikassaInvoke<Bootstrap>("auth/bootstrap");
         if (cancelled) return;
         if (boot.needsSetup) {
           router.replace("/setup");
           return;
         }
 
-        const list = await ikassirInvoke<UserRow[]>("users.list");
+        const list = await unikassaInvoke<UserRow[]>("users.list");
         if (cancelled) return;
         setUsers(list.filter((u) => u.active));
       } catch {
@@ -78,7 +78,7 @@ export default function LoginPage() {
     setError(null);
     setBusy(true);
     try {
-      const res = await ikassirInvoke<LoginResult>("auth/login", {
+      const res = await unikassaInvoke<LoginResult>("auth/login", {
         login: selectedUser.login,
         password,
       });
@@ -105,8 +105,6 @@ export default function LoginPage() {
         <h1 className="text-center text-2xl font-semibold tracking-tight text-stone-800">
           {t("login.title")}
         </h1>
-        <p className="mt-1 text-center text-sm text-stone-500">{t("login.subtitle")}</p>
-        
         <div className="mt-8">
           {loadingUsers ? (
             <div className="text-center text-stone-500 py-8">{t("common.loading")}</div>

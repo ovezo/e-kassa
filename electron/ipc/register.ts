@@ -62,8 +62,8 @@ const printReceiptSchema = z.object({
 });
 
 export function registerIpcHandlers(prisma: PrismaClient): void {
-  ipcMain.removeHandler("ikassir");
-  ipcMain.handle("ikassir", async (_evt, raw: unknown) => {
+  ipcMain.removeHandler("unikassa");
+  ipcMain.handle("unikassa", async (_evt, raw: unknown) => {
     const parsed = envelope.safeParse(raw);
     if (!parsed.success) {
       throw new Error("Invalid IPC envelope");

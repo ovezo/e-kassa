@@ -2,6 +2,11 @@ import type { PrismaClient } from "@prisma/client";
 import { OrderStatus, OrderType } from "@prisma/client";
 import { z } from "zod";
 import { getBusinessDayRange } from "../../../business-day";
+import {
+  clampDeliveryFeeTmt,
+  defaultDeliveryFeeTmt,
+  DELIVERY_FEE_STEP_TMT,
+} from "../../../pos/delivery-fee";
 import { audit } from "../audit";
 
 const FEE_DEFAULTS: Record<string, string> = {
@@ -38,8 +43,7 @@ async function recalcOrderTotals(prisma: PrismaClient, orderId: string): Promise
     serviceFeeTmt = round2(subtotal * (p / 100));
   }
   if (order.type === OrderType.TAKEAWAY_DELIVERY) {
-    const d = Number.parseFloat(settings.delivery_fee_tmt ?? "3");
-    deliveryFeeTmt = round2(Number.isFinite(d) ? d : 3);
+    deliveryFeeTmt = round2(order.deliveryFeeTmt);
   }
   const serviceInTotal = order.serviceFeeWaived ? 0 : serviceFeeTmt;
   const totalTmt = round2(subtotal + serviceInTotal + deliveryFeeTmt);
@@ -100,6 +104,12 @@ const setServiceFeeWaivedSchema = z.object({
   actorUserId: z.string(),
 });
 
+const adjustDeliveryFeeSchema = z.object({
+  orderId: z.string(),
+  delta: z.union([z.literal(DELIVERY_FEE_STEP_TMT), z.literal(-DELIVERY_FEE_STEP_TMT)]),
+  actorUserId: z.string(),
+});
+
 const deleteOrderSchema = z.object({
   orderId: z.string(),
   actorUserId: z.string(),
@@ -108,6 +118,11 @@ const deleteOrderSchema = z.object({
 const discardIfEmptySchema = z.object({
   orderId: z.string(),
   actorUserId: z.string().optional(),
+});
+
+const listByDateRangeSchema = z.object({
+  startDate: z.string(),
+  endDate: z.string(),
 });
 
 const orderInclude = {
@@ -147,12 +162,18 @@ export async function handleOrdersChannel(
         return { ok: false as const, error: "Take-away orders cannot have a table" };
       }
 
+      const settings = await loadFeeSettings(prisma);
+      const initialDeliveryFeeTmt =
+        type === OrderType.TAKEAWAY_DELIVERY ? defaultDeliveryFeeTmt(settings) : 0;
+
       const order = await prisma.order.create({
         data: {
           type,
           status: OrderStatus.OPEN,
           tableId: type === OrderType.TABLE ? tableId : null,
           openedByUserId: actorUserId,
+          deliveryFeeTmt: initialDeliveryFeeTmt,
+          totalTmt: initialDeliveryFeeTmt,
         },
         include: orderInclude,
       });
@@ -199,6 +220,10 @@ export async function handleOrdersChannel(
       const unitPriceTmt = product.priceTmt;
       const lineTotalTmt = round2(unitPriceTmt * qtyAdd);
 
+      const settings = await loadFeeSettings(prisma);
+      const initialDeliveryFeeTmt =
+        type === OrderType.TAKEAWAY_DELIVERY ? defaultDeliveryFeeTmt(settings) : 0;
+
       const created = await prisma.$transaction(async (tx) => {
         const o = await tx.order.create({
           data: {
@@ -206,6 +231,7 @@ export async function handleOrdersChannel(
             status: OrderStatus.OPEN,
             tableId: type === OrderType.TABLE ? tableId : null,
             openedByUserId: actorUserId,
+            deliveryFeeTmt: initialDeliveryFeeTmt,
           },
         });
         await tx.orderLine.create({
@@ -275,8 +301,102 @@ export async function handleOrdersChannel(
       return orders;
     }
 
+    case "orders.listByDateRange": {
+      const parsed = listByDateRangeSchema.safeParse(payload);
+      if (!parsed.success) return { ok: false as const, error: "Invalid input" };
+      
+      const startDate = new Date(parsed.data.startDate);
+      const endDate = new Date(parsed.data.endDate);
+      
+      if (isNaN(startDate.getTime()) || isNaN(endDate.getTime())) {
+        return { ok: false as const, error: "Invalid date format" };
+      }
+      
+      const orders = await prisma.order.findMany({
+        where: { openedAt: { gte: startDate, lt: endDate } },
+        orderBy: { openedAt: "desc" },
+        include: {
+          table: { select: { id: true, label: true } },
+          openedBy: { select: { id: true, displayName: true } },
+          lines: { select: { productName: true, qty: true }, orderBy: { createdAt: "asc" } },
+        },
+      });
+      return { ok: true as const, orders };
+    }
+
+    case "orders.daySummaryByDateRange": {
+      const parsed = listByDateRangeSchema.safeParse(payload);
+      if (!parsed.success) return { ok: false as const, error: "Invalid input" };
+      
+      const startDate = new Date(parsed.data.startDate);
+      const endDate = new Date(parsed.data.endDate);
+      
+      if (isNaN(startDate.getTime()) || isNaN(endDate.getTime())) {
+        return { ok: false as const, error: "Invalid date format" };
+      }
+      
+      const orders = await prisma.order.findMany({
+        where: {
+          status: OrderStatus.CLOSED,
+          openedAt: { gte: startDate, lt: endDate },
+        },
+        include: { lines: true },
+      });
+
+      const productMap = new Map<string, { qty: number; totalTmt: number }>();
+      let serviceCount = 0;
+      let serviceTotal = 0;
+      let deliveryCount = 0;
+      let deliveryTotal = 0;
+      let dayTotal = 0;
+
+      for (const o of orders) {
+        dayTotal += o.totalTmt;
+        if (o.serviceFeeTmt > 0 && !o.serviceFeeWaived) {
+          serviceCount += 1;
+          serviceTotal += o.serviceFeeTmt;
+        }
+        if (o.deliveryFeeTmt > 0) {
+          deliveryCount += 1;
+          deliveryTotal += o.deliveryFeeTmt;
+        }
+        for (const line of o.lines) {
+          const prev = productMap.get(line.productName) ?? { qty: 0, totalTmt: 0 };
+          productMap.set(line.productName, {
+            qty: prev.qty + line.qty,
+            totalTmt: round2(prev.totalTmt + line.lineTotalTmt),
+          });
+        }
+      }
+
+      const venueRow = await prisma.setting.findUnique({ where: { key: "venue_name" } });
+      const products = [...productMap.entries()]
+        .map(([productName, v]) => ({ productName, ...v }))
+        .sort((a, b) => a.productName.localeCompare(b.productName));
+
+      return {
+        ok: true as const,
+        summary: {
+          businessDayStart: startDate.toISOString(),
+          businessDayEnd: endDate.toISOString(),
+          venueName: venueRow?.value ?? "Coffee Shop",
+          orderCount: orders.length,
+          products,
+          service:
+            serviceCount > 0
+              ? { count: serviceCount, totalTmt: round2(serviceTotal) }
+              : null,
+          delivery:
+            deliveryCount > 0
+              ? { count: deliveryCount, totalTmt: round2(deliveryTotal) }
+              : null,
+          dayTotalTmt: round2(dayTotal),
+        },
+      };
+    }
+
     case "orders.daySummary": {
-      const { start, end, timeZone } = getBusinessDayRange();
+      const { start, end } = getBusinessDayRange();
       const orders = await prisma.order.findMany({
         where: {
           status: OrderStatus.CLOSED,
@@ -319,7 +439,6 @@ export async function handleOrdersChannel(
       return {
         businessDayStart: start.toISOString(),
         businessDayEnd: end.toISOString(),
-        businessTimeZone: timeZone,
         venueName: venueRow?.value ?? "Coffee Shop",
         orderCount: orders.length,
         products,
@@ -486,6 +605,41 @@ export async function handleOrdersChannel(
         action: waived ? "orders.service_fee_waived" : "orders.service_fee_restored",
         entity: "Order",
         payload: { orderId, waived },
+      });
+      return { ok: true as const, order: updated };
+    }
+
+    case "orders.adjustDeliveryFee": {
+      const parsed = adjustDeliveryFeeSchema.safeParse(payload);
+      if (!parsed.success) return { ok: false as const, error: "Invalid input" };
+      const { orderId, delta, actorUserId } = parsed.data;
+
+      const order = await prisma.order.findUnique({ where: { id: orderId } });
+      if (!order) return { ok: false as const, error: "Order not found" };
+      if (order.status !== OrderStatus.OPEN) {
+        return { ok: false as const, error: "Order is closed" };
+      }
+      if (order.type !== OrderType.TAKEAWAY_DELIVERY) {
+        return { ok: false as const, error: "Delivery fee applies to delivery orders only" };
+      }
+
+      const newFee = clampDeliveryFeeTmt(order.deliveryFeeTmt + delta);
+      await prisma.order.update({
+        where: { id: orderId },
+        data: { deliveryFeeTmt: newFee },
+      });
+      await recalcOrderTotals(prisma, orderId);
+      const updated = await prisma.order.findUnique({
+        where: { id: orderId },
+        include: orderInclude,
+      });
+      if (!updated) return { ok: false as const, error: "Order not found" };
+
+      await audit(prisma, {
+        userId: actorUserId,
+        action: "orders.adjust_delivery_fee",
+        entity: "Order",
+        payload: { orderId, delta, deliveryFeeTmt: newFee },
       });
       return { ok: true as const, order: updated };
     }

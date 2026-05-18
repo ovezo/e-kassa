@@ -37,7 +37,7 @@ export default function AdminLayout({ children }: { children: ReactNode }) {
   return (
     <div className="flex min-h-screen flex-col">
       <header className="flex flex-wrap items-center gap-3 border-b border-amber-100 bg-amber-50 px-4 py-3">
-        <span className="text-lg font-semibold text-amber-950">{t("admin.brand")}</span>
+        {/* <span className="text-lg font-semibold text-amber-950">{t("admin.brand")}</span> */}
         <nav className="flex flex-wrap gap-2 text-base">
           <Link
             className="min-h-[44px] touch-manipulation rounded-xl px-4 py-2.5 hover:bg-amber-100"
@@ -47,16 +47,22 @@ export default function AdminLayout({ children }: { children: ReactNode }) {
           </Link>
           <Link
             className="min-h-[44px] touch-manipulation rounded-xl px-4 py-2.5 hover:bg-amber-100"
+            href="/admin/order-history"
+          >
+            {t("admin.nav.orderHistory")}
+          </Link>
+          <Link
+            className="min-h-[44px] touch-manipulation rounded-xl px-4 py-2.5 hover:bg-amber-100"
             href="/admin/users"
           >
             {t("admin.nav.users")}
           </Link>
-          <Link
+          {/* <Link
             className="min-h-[44px] touch-manipulation rounded-xl px-4 py-2.5 hover:bg-amber-100"
             href="/admin/logs"
           >
             {t("admin.nav.logs")}
-          </Link>
+          </Link> */}
           <Link
             className="min-h-[44px] touch-manipulation rounded-xl px-4 py-2.5 hover:bg-amber-100"
             href="/admin/catalog"
@@ -65,10 +71,16 @@ export default function AdminLayout({ children }: { children: ReactNode }) {
           </Link>
           <Link
             className="min-h-[44px] touch-manipulation rounded-xl px-4 py-2.5 hover:bg-amber-100"
+            href="/admin/settings"
+          >
+            {t("admin.nav.settings")}
+          </Link>
+          {/* <Link
+            className="min-h-[44px] touch-manipulation rounded-xl px-4 py-2.5 hover:bg-amber-100"
             href="/admin/reports"
           >
             {t("admin.nav.reports")}
-          </Link>
+          </Link> */}
         </nav>
         <div className="ml-auto flex flex-wrap items-center justify-end gap-3">
           <LanguageSwitcher variant="amber" />

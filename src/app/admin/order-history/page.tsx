@@ -10,7 +10,6 @@ import { ReceiptModal } from "@/components/ReceiptModal";
 import { useCallback, useEffect, useState } from "react";
 import { OrderStatus, OrderType } from "@prisma/client";
 import { unikassaInvoke } from "@/lib/electron-api";
-import { waitForPendingOrderDiscard } from "@/lib/pos/discard-empty-order";
 import type { PosOrderListRow } from "@/lib/pos/order-list-row";
 import { useLocale, useTranslations } from "@/lib/i18n/LocaleProvider";
 import { printReceiptSilent, printReceiptSystemDialog } from "@/lib/pos/print-receipt";
@@ -19,8 +18,10 @@ import { readSession } from "@/lib/session";
 
 const btnAction =
   "min-h-[44px] touch-manipulation rounded-xl border border-amber-300 bg-amber-50 px-4 py-2 text-base font-medium text-amber-950 hover:bg-amber-100 disabled:opacity-50";
+const input =
+  "min-h-[44px] touch-manipulation rounded-xl border border-stone-300 px-4 py-2 text-base outline-none focus:ring-2 focus:ring-stone-400";
 
-export default function PosHistoryPage() {
+export default function AdminOrderHistoryPage() {
   const t = useTranslations();
   const { locale } = useLocale();
   const [orders, setOrders] = useState<PosOrderListRow[]>([]);
@@ -29,17 +30,75 @@ export default function PosHistoryPage() {
   const [summaryBusy, setSummaryBusy] = useState(false);
   const [printBusy, setPrintBusy] = useState(false);
   const [settings, setSettings] = useState<Record<string, string> | null>(null);
+  const [loading, setLoading] = useState(false);
+
+  // Helper to format date for datetime-local input (local time, not UTC)
+  function formatDateTimeLocal(date: Date): string {
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const day = String(date.getDate()).padStart(2, '0');
+    const hours = String(date.getHours()).padStart(2, '0');
+    const minutes = String(date.getMinutes()).padStart(2, '0');
+    return `${year}-${month}-${day}T${hours}:${minutes}`;
+  }
+
+  const [startDate, setStartDate] = useState(() => {
+    const now = new Date();
+    const hour = now.getHours();
+    if (hour < 6) {
+      now.setDate(now.getDate() - 1);
+    }
+    now.setHours(6, 0, 0, 0);
+    return formatDateTimeLocal(now);
+  });
+
+  const [endDate, setEndDate] = useState(() => {
+    const now = new Date();
+    const hour = now.getHours();
+    if (hour >= 6) {
+      now.setDate(now.getDate() + 1);
+    }
+    now.setHours(6, 0, 0, 0);
+    return formatDateTimeLocal(now);
+  });
 
   const load = useCallback(async () => {
     setError(null);
+    setLoading(true);
     try {
-      await waitForPendingOrderDiscard();
-      const list = await unikassaInvoke<PosOrderListRow[]>("orders.listToday");
-      setOrders(list);
+      const start = new Date(startDate);
+      const end = new Date(endDate);
+
+      if (isNaN(start.getTime()) || isNaN(end.getTime())) {
+        setError("Invalid date format");
+        return;
+      }
+
+      if (start >= end) {
+        setError("Start date must be before end date");
+        return;
+      }
+
+      const result = await unikassaInvoke<{ ok: boolean; orders?: PosOrderListRow[]; error?: string }>(
+        "orders.listByDateRange",
+        {
+          startDate: start.toISOString(),
+          endDate: end.toISOString(),
+        },
+      );
+
+      if (!result.ok || !result.orders) {
+        setError(result.error ?? "Failed to load orders");
+        return;
+      }
+
+      setOrders(result.orders);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Failed to load");
+    } finally {
+      setLoading(false);
     }
-  }, []);
+  }, [startDate, endDate]);
 
   const {
     receiptOrderId,
@@ -55,7 +114,7 @@ export default function PosHistoryPage() {
 
   useEffect(() => {
     void load();
-  }, [load]);
+  }, []);
 
   const orderTypeLabel = useCallback(
     (type: OrderType) => {
@@ -83,11 +142,31 @@ export default function PosHistoryPage() {
     setSummaryBusy(true);
     setError(null);
     try {
-      const [summary, cfg] = await Promise.all([
-        unikassaInvoke<DaySummaryData>("orders.daySummary"),
+      const start = new Date(startDate);
+      const end = new Date(endDate);
+
+      if (isNaN(start.getTime()) || isNaN(end.getTime())) {
+        setError("Invalid date format");
+        return;
+      }
+
+      const [result, cfg] = await Promise.all([
+        unikassaInvoke<{ ok: boolean; summary?: DaySummaryData; error?: string }>(
+          "orders.daySummaryByDateRange",
+          {
+            startDate: start.toISOString(),
+            endDate: end.toISOString(),
+          },
+        ),
         unikassaInvoke<Record<string, string>>("settings.getAll"),
       ]);
-      setDaySummary(summary);
+
+      if (!result.ok || !result.summary) {
+        setError(result.error ?? "Failed to load summary");
+        return;
+      }
+
+      setDaySummary(result.summary);
       setSettings(cfg);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Failed to load summary");
@@ -117,7 +196,7 @@ export default function PosHistoryPage() {
       venueName: settings.venue_name ?? "Coffee Shop",
       venueAddress: settings.venue_address ?? "",
       cashierName: session.displayName,
-      customerLabel: `${t("pos.history.daySummaryTitle")} (${daySummary.orderCount} orders)`,
+      customerLabel: `${t("admin.orderHistory.summaryTitle")} (${daySummary.orderCount} orders)`,
       note: "",
       timestamp: daySummary.businessDayStart,
       orderType: OrderType.TABLE,
@@ -179,32 +258,70 @@ export default function PosHistoryPage() {
 
   return (
     <div className="space-y-6">
-      <PageHeader
-        title={t("pos.history.title")}
-        backHref="/pos/open"
-        actions={
-          <div className="flex flex-wrap gap-2">
-            <button
-              type="button"
-              className={btnAction}
-              disabled={summaryBusy}
-              onClick={() => void openDaySummary()}
-            >
-              {t("pos.history.printDaySummary")}
-            </button>
-            <button
-              type="button"
-              className="min-h-[44px] touch-manipulation rounded-xl border border-stone-300 bg-white px-4 py-2 text-base font-medium hover:bg-stone-50"
-              onClick={() => void load()}
-            >
-              {t("common.refresh")}
-            </button>
+      <PageHeader title={t("admin.orderHistory.title")} backHref="/admin/dashboard" />
+
+      <div className="rounded-2xl border border-stone-200 bg-white p-6 shadow-sm">
+        <h2 className="text-lg font-medium text-stone-800">{t("admin.orderHistory.filterTitle")}</h2>
+        <div className="mt-4 flex flex-wrap items-end gap-2">
+          <div className="flex-1 min-w-[200px]">
+            <label className="text-sm font-medium text-stone-600">
+              {t("admin.orderHistory.startDate")}
+            </label>
+            <input
+              type="datetime-local"
+              className={input + " mt-1 w-full cursor-pointer"}
+              value={startDate}
+              onChange={(e) => setStartDate(e.target.value)}
+              onClick={(e) => {
+                try {
+                  e.currentTarget.showPicker?.();
+                } catch (err) {
+                  // Ignore showPicker errors
+                }
+              }}
+            />
           </div>
-        }
-      />
+          <div className="flex-1 min-w-[200px]">
+            <label className="text-sm font-medium text-stone-600">
+              {t("admin.orderHistory.endDate")}
+            </label>
+            <input
+              type="datetime-local"
+              className={input + " mt-1 w-full cursor-pointer"}
+              value={endDate}
+              onChange={(e) => setEndDate(e.target.value)}
+              onClick={(e) => {
+                try {
+                  e.currentTarget.showPicker?.();
+                } catch (err) {
+                  // Ignore showPicker errors
+                }
+              }}
+            />
+          </div>
+          <button
+            type="button"
+            className={btnAction}
+            onClick={() => void load()}
+            disabled={loading}
+          >
+            {loading ? t("common.loading") : t("admin.orderHistory.search")}
+          </button>
+          <button
+            type="button"
+            className={btnAction}
+            disabled={summaryBusy || orders.length === 0}
+            onClick={() => void openDaySummary()}
+          >
+            {t("admin.orderHistory.viewSummary")}
+          </button>
+        </div>
+      </div>
+
       {error ? (
         <p className="rounded-xl bg-red-50 px-4 py-3 text-base text-red-800">{error}</p>
       ) : null}
+
       <PosOrderListGrid>
         {orders.map((o) => (
           <PosOrderListGridItem key={o.id}>
@@ -224,8 +341,9 @@ export default function PosHistoryPage() {
           </PosOrderListGridItem>
         ))}
       </PosOrderListGrid>
-      {orders.length === 0 && !error ? (
-        <p className="text-lg text-stone-500">{t("pos.history.empty")}</p>
+
+      {orders.length === 0 && !error && !loading ? (
+        <p className="text-lg text-stone-500">{t("admin.orderHistory.empty")}</p>
       ) : null}
 
       <OrderReceiptDialog
@@ -238,7 +356,7 @@ export default function PosHistoryPage() {
         <ReceiptModal
           open
           onClose={() => setDaySummary(null)}
-          title={t("pos.history.daySummaryTitle")}
+          title={t("admin.orderHistory.summaryTitle")}
           onPrint={() => void handlePrintDaySummary()}
           onSystemPrint={handleSystemPrintDaySummary}
           printBusy={printBusy}

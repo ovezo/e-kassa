@@ -3,7 +3,7 @@
 import { PageHeader } from "@/components/PageHeader";
 import { useCallback, useEffect, useState } from "react";
 import { Role } from "@prisma/client";
-import { ikassirInvoke } from "@/lib/electron-api";
+import { unikassaInvoke } from "@/lib/electron-api";
 import { readSession } from "@/lib/session";
 import { ChangePasswordModal } from "@/components/ChangePasswordModal";
 import { NumberPad } from "@/components/NumberPad";
@@ -42,7 +42,7 @@ export default function AdminUsersPage() {
   const load = useCallback(async () => {
     setError(null);
     try {
-      const list = await ikassirInvoke<UserRow[]>("users.list");
+      const list = await unikassaInvoke<UserRow[]>("users.list");
       setUsers(list);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Failed to load users");
@@ -62,7 +62,7 @@ export default function AdminUsersPage() {
     setBusy(true);
     setError(null);
     try {
-      const res = await ikassirInvoke<{ ok: boolean; error?: string }>(
+      const res = await unikassaInvoke<{ ok: boolean; error?: string }>(
         "users.create",
         { ...form, actorUserId: actorId },
       );
@@ -83,7 +83,7 @@ export default function AdminUsersPage() {
     setBusy(true);
     setError(null);
     try {
-      const res = await ikassirInvoke<{ ok: boolean; error?: string }>(
+      const res = await unikassaInvoke<{ ok: boolean; error?: string }>(
         "users.update",
         { id: u.id, active: !u.active, actorUserId: actorId },
       );
@@ -101,7 +101,7 @@ export default function AdminUsersPage() {
     setBusy(true);
     setError(null);
     try {
-      const res = await ikassirInvoke<{ ok: boolean; error?: string }>(
+      const res = await unikassaInvoke<{ ok: boolean; error?: string }>(
         "users.delete",
         { id: u.id, actorUserId: actorId },
       );
@@ -116,11 +116,7 @@ export default function AdminUsersPage() {
 
   return (
     <div className="space-y-8">
-      <PageHeader
-        title="Users"
-        subtitle="Create staff accounts and manage access."
-        backHref="/admin/dashboard"
-      />
+      <PageHeader title="Users" backHref="/admin/dashboard" />
 
       {error ? (
         <p className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-800" role="alert">

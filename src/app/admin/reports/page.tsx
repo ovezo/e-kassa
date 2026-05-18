@@ -2,7 +2,7 @@
 
 import { PageHeader } from "@/components/PageHeader";
 import { useCallback, useEffect, useState } from "react";
-import { ikassirInvoke } from "@/lib/electron-api";
+import { unikassaInvoke } from "@/lib/electron-api";
 
 const btnPrimary =
   "min-h-[44px] touch-manipulation rounded-xl bg-stone-900 px-4 py-2 text-base font-medium text-white hover:bg-stone-800 disabled:opacity-50";
@@ -27,7 +27,7 @@ async function fetchAllAuditLogs(): Promise<LogRow[]> {
   const out: LogRow[] = [];
   let cursor: { createdAt: string; id: string } | undefined;
   for (;;) {
-    const page = await ikassirInvoke<LogsPage>("logs.list", {
+    const page = await unikassaInvoke<LogsPage>("logs.list", {
       limit: 200,
       ...(cursor ? { cursor } : {}),
     });
@@ -77,7 +77,7 @@ export default function AdminReportsPage() {
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
-    a.download = `ikassir-audit-${new Date().toISOString().slice(0, 10)}.csv`;
+    a.download = `unikassa-audit-${new Date().toISOString().slice(0, 10)}.csv`;
     a.click();
     URL.revokeObjectURL(url);
   }
@@ -86,7 +86,6 @@ export default function AdminReportsPage() {
     <div className="space-y-4">
       <PageHeader
         title="Reports"
-        subtitle="Export the full audit log as CSV (paged load in the background)."
         backHref="/admin/dashboard"
         actions={
           <button type="button" className={btnPrimary} onClick={downloadCsv} disabled={loading || !logs.length}>

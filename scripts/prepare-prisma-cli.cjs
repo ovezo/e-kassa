@@ -33,7 +33,7 @@ function collectDependencies(entryPackage, rootNodeModules, collected = new Set(
   if (collected.has(entryPackage)) return;
   const pkgJson = path.join(packageDir(rootNodeModules, entryPackage), "package.json");
   if (!fs.existsSync(pkgJson)) {
-    console.warn("[iKassir] prepare-prisma-cli: dependency not installed:", entryPackage);
+    console.warn("[uniKassa] prepare-prisma-cli: dependency not installed:", entryPackage);
     return;
   }
   collected.add(entryPackage);
@@ -79,12 +79,12 @@ Module._initPaths();
 try {
   require(cli);
 } catch (e) {
-  console.error("[iKassir] prisma-cli bundle failed load test:", e.message);
+  console.error("[uniKassa] prisma-cli bundle failed load test:", e.message);
   process.exit(1);
 }
 
 console.log(
-  "[iKassir] prisma-cli bundle ready:",
+  "[uniKassa] prisma-cli bundle ready:",
   bundleRoot,
   `(${packages.size} packages)`,
 );

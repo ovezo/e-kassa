@@ -1,6 +1,6 @@
-# iKassir — Product specification and technical plan
+# uniKassa — Product specification and technical plan
 
-This document is the single source of truth for **what** we build (product) and **how** we implement it (technical plan) for the reception desktop POS **iKassir**.
+This document is the single source of truth for **what** we build (product) and **how** we implement it (technical plan) for the reception desktop POS **uniKassa**.
 
 ---
 
@@ -154,7 +154,7 @@ Performance (~500 SKUs), hashed passwords, DB transactions on close, auto-save c
 | Shell | **Electron** (current stable) | One `BrowserWindow` full-screen kiosk-style optional later |
 | UI | **Next.js** ( **App Router** ) | Client-heavy POS; avoid relying on SSR to DB from renderer |
 | Language | **TypeScript** everywhere | Shared types between main and renderer |
-| DB | **SQLite** file under `app.getPath('userData')` | Single file `ikassir.db` |
+| DB | **SQLite** file under `app.getPath('userData')` | Single file `unikassa.db` |
 | ORM | **Prisma** | Migrations checked in; `prisma generate` in CI/build |
 | Passwords | **bcrypt** (or argon2 if preferred) | Only on main / server boundary, never in client-only bundles unguarded |
 | Styling | **Tailwind CSS** + shared UI primitives | Match coffee-shop reception: large targets, clear hierarchy |
@@ -205,7 +205,7 @@ All mutating calls record `AuditLog` in main where applicable.
 ### B.5 Repository layout (proposed)
 
 ```text
-ikassir/
+unikassa/
   electron/
     main.ts              # app lifecycle, window, IPC registration
     preload.ts           # contextBridge expose API

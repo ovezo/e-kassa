@@ -1,4 +1,4 @@
-import { ikassirInvoke } from "@/lib/electron-api";
+import { unikassaInvoke } from "@/lib/electron-api";
 import type { ReceiptPrintPayload } from "./receipt-html";
 import { logPrintEvent } from "./print-log";
 import { printReceiptInBrowser, type PrintReceiptResult } from "./print-receipt-browser";
@@ -11,14 +11,14 @@ type ElectronPrintResult =
 export async function printReceiptSilent(
   payload: ReceiptPrintPayload,
 ): Promise<PrintReceiptResult> {
-  if (typeof window !== "undefined" && window.ikassir) {
+  if (typeof window !== "undefined" && window.unikassa) {
     void logPrintEvent("Renderer: silent print requested", {
       orderType: payload.orderType,
       lineCount: payload.lines.length,
       totalTmt: payload.totals.totalTmt,
     });
 
-    const res = await ikassirInvoke<ElectronPrintResult>("print.receipt", payload);
+    const res = await unikassaInvoke<ElectronPrintResult>("print.receipt", payload);
     if (res.ok) {
       void logPrintEvent("Renderer: silent print finished", { mode: res.mode });
       return { ok: true };

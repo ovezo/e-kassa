@@ -17,7 +17,7 @@ const ALLOWED_MIMES = new Set(Object.keys(MIME_TO_EXT));
 const STORED_BASENAME_RE = /^[a-f0-9]{32}\.(jpg|png|webp|gif)$/;
 
 /** Electron + `next dev` write this so the Next process resolves the same folder as IPC (no env on Next). */
-export const PRODUCT_IMAGES_DEV_POINTER_FILENAME = ".ikassir-product-images-root";
+export const PRODUCT_IMAGES_DEV_POINTER_FILENAME = ".unikassa-product-images-root";
 
 function readDevPointerRoot(): string | null {
   try {
@@ -36,7 +36,7 @@ function readDevPointerRoot(): string | null {
 }
 
 export function getProductImagesRoot(): string {
-  const fromEnv = process.env.IKASSIR_PRODUCT_IMAGES_ROOT?.trim();
+  const fromEnv = process.env.UNIKASSA_PRODUCT_IMAGES_ROOT?.trim();
   if (fromEnv) return path.resolve(fromEnv);
   const fromPointer = readDevPointerRoot();
   if (fromPointer) return fromPointer;

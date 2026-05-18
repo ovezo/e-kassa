@@ -1,7 +1,7 @@
 import type { PrinterInfo } from "electron";
 import { appendLog } from "../log-file";
 
-/** Append a receipt-printer event to `%APPDATA%\\iKassir\\ikassir.log`. */
+/** Append a receipt-printer event to `%APPDATA%\\uniKassa\\unikassa.log`. */
 export function logPrint(message: string, detail?: unknown): void {
   appendLog(`[print] ${message}`, detail);
 }

@@ -5,7 +5,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { EditableOrderReceiptView } from "@/components/EditableOrderReceiptView";
 import { OrderReceiptView } from "@/components/OrderReceiptView";
 import { ReceiptModal } from "@/components/ReceiptModal";
-import { ikassirInvoke } from "@/lib/electron-api";
+import { unikassaInvoke } from "@/lib/electron-api";
 import type { PosOrderDetail } from "@/lib/pos/order-list-row";
 import {
   calcReceiptTotals,
@@ -20,6 +20,7 @@ import {
   receiptPrintLabels,
 } from "@/lib/pos/receipt-print-payload";
 import { useTranslations } from "@/lib/i18n/LocaleProvider";
+import { DELIVERY_FEE_STEP_TMT } from "@/lib/pos/delivery-fee";
 import { readSession } from "@/lib/session";
 import { OrderType } from "@prisma/client";
 
@@ -33,10 +34,11 @@ type PrintJob = {
 type OrderReceiptDialogProps = {
   orderId: string | null;
   onClose: () => void;
-  /** Called after order is closed from elsewhere; optional refresh hook. */
+  /** Called when an open order is mutated from the receipt (fees, etc.). */
+  onOrderUpdated?: () => void | Promise<void>;
 };
 
-export function OrderReceiptDialog({ orderId, onClose }: OrderReceiptDialogProps) {
+export function OrderReceiptDialog({ orderId, onClose, onOrderUpdated }: OrderReceiptDialogProps) {
   const t = useTranslations();
   const [order, setOrder] = useState<PosOrderDetail | null>(null);
   const [settings, setSettings] = useState<Record<string, string> | null>(null);
@@ -47,8 +49,6 @@ export function OrderReceiptDialog({ orderId, onClose }: OrderReceiptDialogProps
 
   const venueName = settings?.venue_name ?? "Coffee Shop";
   const servicePct = settings?.service_fee_percent ?? "10";
-  const deliveryFee = settings?.delivery_fee_tmt ?? "3";
-
   const orderTypeLabel = useCallback(
     (type: OrderType) => {
       switch (type) {
@@ -81,11 +81,11 @@ export function OrderReceiptDialog({ orderId, onClose }: OrderReceiptDialogProps
     void (async () => {
       try {
         const [orderRes, cfg] = await Promise.all([
-          ikassirInvoke<{ ok: true; order: PosOrderDetail } | { ok: false; error?: string }>(
+          unikassaInvoke<{ ok: true; order: PosOrderDetail } | { ok: false; error?: string }>(
             "orders.get",
             { id: orderId },
           ),
-          ikassirInvoke<Record<string, string>>("settings.getAll"),
+          unikassaInvoke<Record<string, string>>("settings.getAll"),
         ]);
         if (cancelled) return;
         if (!orderRes.ok) {
@@ -133,15 +133,13 @@ export function OrderReceiptDialog({ orderId, onClose }: OrderReceiptDialogProps
     if (!printJob || !order) return null;
     if (!printJob.editable && printJob.totals) return printJob.totals;
     const pct = Number.parseFloat(servicePct);
-    const deliveryRaw = Number.parseFloat(deliveryFee);
     return calcReceiptTotals(order.type, receiptVisibleLines, {
       serviceFeePercent: Number.isFinite(pct) ? pct : 10,
-      fullDeliveryFeeTmt:
-        order.deliveryFeeTmt || (Number.isFinite(deliveryRaw) ? deliveryRaw : 3),
+      fullDeliveryFeeTmt: order.deliveryFeeTmt,
       includeDelivery: true,
       serviceFeeWaived: order.serviceFeeWaived,
     });
-  }, [printJob, order, receiptVisibleLines, servicePct, deliveryFee]);
+  }, [printJob, order, receiptVisibleLines, servicePct]);
 
   async function toggleServiceFeeWaived() {
     if (!orderId || !order || order.status !== OrderStatus.OPEN || order.type !== OrderType.TABLE) {
@@ -151,7 +149,7 @@ export function OrderReceiptDialog({ orderId, onClose }: OrderReceiptDialogProps
     if (!session) return;
     setError(null);
     try {
-      const res = await ikassirInvoke<{ ok: boolean; order?: PosOrderDetail; error?: string }>(
+      const res = await unikassaInvoke<{ ok: boolean; order?: PosOrderDetail; error?: string }>(
         "orders.setServiceFeeWaived",
         {
           orderId,
@@ -167,6 +165,38 @@ export function OrderReceiptDialog({ orderId, onClose }: OrderReceiptDialogProps
       if (printJob?.editable) {
         setPrintJob((j) => (j ? { ...j, totals: undefined } : j));
       }
+      await onOrderUpdated?.();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Failed");
+    }
+  }
+
+  async function adjustDeliveryFee(delta: number) {
+    if (
+      !orderId ||
+      !order ||
+      order.status !== OrderStatus.OPEN ||
+      order.type !== OrderType.TAKEAWAY_DELIVERY
+    ) {
+      return;
+    }
+    const session = readSession();
+    if (!session) return;
+    setError(null);
+    try {
+      const res = await unikassaInvoke<{ ok: boolean; order?: PosOrderDetail; error?: string }>(
+        "orders.adjustDeliveryFee",
+        { orderId, delta, actorUserId: session.id },
+      );
+      if (!res.ok || !res.order) {
+        setError(res.error ?? "Update failed");
+        return;
+      }
+      setOrder(res.order);
+      if (printJob?.editable) {
+        setPrintJob((j) => (j ? { ...j, totals: undefined } : j));
+      }
+      await onOrderUpdated?.();
     } catch (e) {
       setError(e instanceof Error ? e.message : "Failed");
     }
@@ -287,9 +317,10 @@ export function OrderReceiptDialog({ orderId, onClose }: OrderReceiptDialogProps
           totals={receiptDisplayTotals}
           orderTypeLabel={orderTypeLabel}
           servicePct={servicePct}
-          deliveryFee={deliveryFee}
           onToggleLine={toggleLineOnReceipt}
           onToggleServiceFee={() => void toggleServiceFeeWaived()}
+          onDecreaseDeliveryFee={() => void adjustDeliveryFee(-DELIVERY_FEE_STEP_TMT)}
+          onIncreaseDeliveryFee={() => void adjustDeliveryFee(DELIVERY_FEE_STEP_TMT)}
           t={t}
         />
       ) : (
@@ -303,7 +334,6 @@ export function OrderReceiptDialog({ orderId, onClose }: OrderReceiptDialogProps
           totals={receiptDisplayTotals}
           orderTypeLabel={orderTypeLabel}
           servicePct={servicePct}
-          deliveryFee={deliveryFee}
           t={t}
         />
       )}

@@ -10,7 +10,7 @@ export function appendLog(message: string, detail?: unknown): void {
 export function logFileLocation(): string {
   try {
     if (app.isReady()) {
-      return path.join(app.getPath("userData"), "ikassir.log");
+      return path.join(app.getPath("userData"), "unikassa.log");
     }
   } catch {
     // fall through

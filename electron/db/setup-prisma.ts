@@ -26,7 +26,7 @@ export function setupPrismaForElectron(): void {
   const defaultJs = path.join(clientDir, "default.js");
 
   if (!fs.existsSync(defaultJs)) {
-    console.error("[iKassir] Prisma client missing at", clientDir);
+    console.error("[uniKassa] Prisma client missing at", clientDir);
     throw new Error(
       "Prisma client not bundled. Reinstall the app or contact support.",
     );
@@ -51,7 +51,7 @@ export function setupPrismaForElectron(): void {
     if (fs.existsSync(engine)) {
       process.env.PRISMA_QUERY_ENGINE_LIBRARY = engine;
     } else {
-      console.error("[iKassir] Windows Prisma engine missing:", engine);
+      console.error("[uniKassa] Windows Prisma engine missing:", engine);
     }
   } else if (process.platform === "darwin") {
     const engines = fs

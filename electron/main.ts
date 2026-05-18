@@ -37,7 +37,7 @@ let mainWindow: BrowserWindow | null = null;
 
 const gotSingleInstanceLock = app.requestSingleInstanceLock();
 if (!gotSingleInstanceLock) {
-  appendBootLog("Second instance blocked — another iKassir is already running");
+  appendBootLog("Second instance blocked — another uniKassa is already running");
   app.quit();
   process.exit(0);
 }
@@ -73,7 +73,7 @@ function killNextChild(): void {
 
 function resolveDbPath(): string {
   if (app.isPackaged) {
-    return path.join(app.getPath("userData"), "ikassir.db");
+    return path.join(app.getPath("userData"), "unikassa.db");
   }
   return path.join(appRoot(), "prisma", "dev.db");
 }
@@ -170,7 +170,7 @@ async function ensureRendererBaseUrl(): Promise<string> {
   }
 
   const imagesRoot =
-    process.env.IKASSIR_PRODUCT_IMAGES_ROOT?.trim() ||
+    process.env.UNIKASSA_PRODUCT_IMAGES_ROOT?.trim() ||
     path.join(app.getPath("userData"), "product-images");
 
   appendLog("Starting Next standalone", { serverJs, port, serverDir });
@@ -186,8 +186,8 @@ async function ensureRendererBaseUrl(): Promise<string> {
       HOSTNAME: "127.0.0.1",
       NODE_ENV: "production",
       NODE_PATH: standaloneModules,
-      IKASSIR_PRODUCT_IMAGES_ROOT: imagesRoot,
-      IKASSIR_TIMEZONE: process.env.IKASSIR_TIMEZONE ?? "Asia/Ashgabat",
+      UNIKASSA_PRODUCT_IMAGES_ROOT: imagesRoot,
+      UNIKASSA_TIMEZONE: process.env.UNIKASSA_TIMEZONE ?? "Asia/Ashgabat",
     },
     stdio: ["ignore", "pipe", "pipe"],
     windowsHide: true,
@@ -222,7 +222,7 @@ async function createMainWindow(): Promise<void> {
     height: 800,
     minWidth: 900,
     minHeight: 600,
-    title: "iKassir",
+    title: "uniKassa",
     show: true,
     autoHideMenuBar: true,
     webPreferences: {
@@ -248,7 +248,7 @@ async function createMainWindow(): Promise<void> {
     "data:text/html;charset=utf-8," +
       encodeURIComponent(
         "<!doctype html><body style='font-family:Segoe UI,sans-serif;padding:2rem;color:#444'>" +
-          "<h2>iKassir</h2><p>Starting…</p></body>",
+          "<h2>uniKassa</h2><p>Starting…</p></body>",
       ),
   );
 
@@ -269,7 +269,7 @@ function focusOrCreateMainWindow(): void {
     return;
   }
   void createMainWindow().catch((e) => {
-    fatalStartup("iKassir — UI failed", e instanceof Error ? e.message : String(e), e);
+    fatalStartup("uniKassa — UI failed", e instanceof Error ? e.message : String(e), e);
   });
 }
 
@@ -290,7 +290,7 @@ app.whenReady().then(async () => {
     setupPrismaForElectron();
   } catch (e) {
     fatalStartup(
-      "iKassir — database engine",
+      "uniKassa — database engine",
       e instanceof Error ? e.message : String(e),
       e,
     );
@@ -303,7 +303,7 @@ app.whenReady().then(async () => {
     fs.mkdirSync(dbDir, { recursive: true });
   }
   const productImagesDir = resolveProductImagesDir();
-  process.env.IKASSIR_PRODUCT_IMAGES_ROOT = productImagesDir;
+  process.env.UNIKASSA_PRODUCT_IMAGES_ROOT = productImagesDir;
   if (!fs.existsSync(productImagesDir)) {
     fs.mkdirSync(productImagesDir, { recursive: true });
   }
@@ -323,7 +323,7 @@ app.whenReady().then(async () => {
       ensureDatabase(dbPath, appRoot());
     } catch (e) {
       fatalStartup(
-        "iKassir — database setup",
+        "uniKassa — database setup",
         e instanceof Error ? e.message : String(e),
         e,
       );
@@ -339,7 +339,7 @@ app.whenReady().then(async () => {
     prisma = getPrisma(dbPath);
   } catch (e) {
     fatalStartup(
-      "iKassir — database connection",
+      "uniKassa — database connection",
       e instanceof Error ? e.message : String(e),
       e,
     );

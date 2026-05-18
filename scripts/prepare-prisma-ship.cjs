@@ -39,9 +39,9 @@ if (fs.existsSync(migrations)) {
 
 for (const name of fs.readdirSync(dest)) {
   if (name.endsWith(".db") || name.endsWith(".db-journal")) {
-    console.error("[iKassir] Unexpected database file in prisma-ship:", name);
+    console.error("[uniKassa] Unexpected database file in prisma-ship:", name);
     process.exit(1);
   }
 }
 
-console.log("[iKassir] prisma-ship ready:", dest);
+console.log("[uniKassa] prisma-ship ready:", dest);

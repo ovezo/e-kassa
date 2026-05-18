@@ -5,7 +5,7 @@ export type SessionUser = {
   role: "ADMIN" | "STAFF";
 };
 
-const SESSION_KEY = "ikassir_session";
+const SESSION_KEY = "unikassa_session";
 const SESSION_KEYS_LEGACY = ["me-kassa_session", "ekassa_session"] as const;
 
 export function saveSession(user: SessionUser): void {
